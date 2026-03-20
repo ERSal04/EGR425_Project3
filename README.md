@@ -269,4 +269,4 @@ _animController.forward(from: 0);
 
 ---
 
-*EGR 425 — Project 2 Proposal | Elijah & Diego | Spring 2026*
+*EGR 425 — Project 3 Proposal | Elijah & Diego | Spring 2026*
