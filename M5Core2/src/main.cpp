@@ -1,9 +1,23 @@
 #include <Arduino.h>
 #include <M5Core2.h>
+#include <Adafruit_seesaw.h>
 
 //////////////////////////////////////////////////////
-// Decleration of Enums
+// Sprite Decleration
 //////////////////////////////////////////////////////
+TFT_eSprite sprite = TFT_eSprite(&M5.Lcd);
+
+//////////////////////////////////////////////////////
+// Gamepad QT configurations
+//////////////////////////////////////////////////////
+Adafruit_seesaw gamepad;
+#define BUTTON_X  6
+#define BUTTON_Y  2
+#define BUTTON_A  5
+#define BUTTON_B  1
+#define BUTTON_START 16
+#define BUTTON_SELECT 14
+
 enum NodeType { NORMAL, ENTRY, JUNCTION, CORE };
 enum Occupant { NONE, HACKER, TRACE };
 
@@ -25,13 +39,55 @@ struct Node  {
 // Function Declerations
 //////////////////////////////////////////////////////
 Node makeNode(int id, float x, float y, NodeType type, int conns[], int connCount);
+void drawScreen();
+void initializeTraces();
+
+// Handles the different states of the game
+void handleHackerSelect();
+void handleGameplay();
+void handleGameOver();
+void resetGame(); 
+
+// Handles switching between player turns
+void handleHackerTurn();
+void handleDefenderTurn();
 
 //////////////////////////////////////////////////////
 // Variable Declarations
 //////////////////////////////////////////////////////
 Node nodes[24];
+
+int hackerPosition = -1;
+int tracePosition[2] = {-1, -1};
+int selectedTrace = 0; // which trace (0 or 1) is being moved
+int activeTraces = 0;
+int selectedNode = 23;
+int speedBoostUsage = 2;
+int speedBoostDuration = 0;
+int nodeLockUsage = 3;
+int pingScanUsage = 3;
+
+enum gameStatus { HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER };
+gameStatus currentStatus = HACKER_SELECT;
+enum playerTurn { HACKER_TURN, DEFENDER_TURN };
+playerTurn currentTurn = DEFENDER_TURN;
+
+enum defenderUIState { 
+    MAP_VIEW,      // free roam, joystick pans camera
+    NODE_SELECT,   // selecting which node to move trace to
+    TOOL_SELECT    // selecting which tool to use
+};
+defenderUIState defenderState = MAP_VIEW;
+
+// Junction is in the center of the screen
 float cameraX = 290;
 float cameraY = 130;
+
+// Core is in the center of screen
+// float cameraX = 290; 
+// float cameraY = 320;
+
+int nodeRadius;
 
 //////////////////////////////////////////////////////
 // Contrsutor function to create a node
@@ -52,7 +108,113 @@ Node makeNode(int id, float x, float y, NodeType type, int conns[], int connCoun
   return n;
 }
 
+uint32_t getNodeColor(NodeType type) {
+  switch(type) {
+      case ENTRY:    return TFT_YELLOW;
+      case NORMAL:   return TFT_GREEN;
+      case JUNCTION: return TFT_CYAN;
+      case CORE:     return TFT_RED;
+      default:       return TFT_GREEN;
+  }
+}
+
+int getNodeRadius(NodeType type) {
+    switch(type) {
+        case ENTRY:    return 6;
+        case NORMAL:   return 4;
+        case JUNCTION: return 8;
+        case CORE:     return 10;
+        default:       return 4;
+    }
+}
+
+void drawScreen() {
+
+  sprite.fillScreen(TFT_BLACK);
+
+  if (currentStatus == GAME_OVER) {
+    sprite.fillScreen(TFT_BLACK);
+    sprite.print("GAME OVER");
+
+    if (M5.BtnA.wasPressed()) {
+      currentStatus = HACKER_SELECT;
+    }
+  } else if(currentStatus == HACKER_SELECT) {
+    sprite.print("Waiting for Hacker...");
+  } else {
+
+    // Loop through each node
+    for (int i = 0; i < 24; i++) {
+
+      // Get the current Node and its relative position to the camera
+      Node currentNode = nodes[i];
+      int screenX = (int) currentNode.worldX - cameraX;
+      int screenY = (int) currentNode.worldY - cameraY;
+
+      // Check if each node is in the camera view
+      if (screenX >= 0 && screenX <= 320 && screenY >= 0 && screenY <= 240) {
+        
+        // Loop through the Node connections and draw a line between the coords of each connected node
+        for (int j = 0; j < currentNode.connectionCount; j++) {
+          int connectingNodeId = nodes[i].connections[j];
+
+          int x1 = (int)(nodes[i].worldX - cameraX);
+          int y1 = (int)(nodes[i].worldY - cameraY);
+          int x2 = (int)(nodes[connectingNodeId].worldX - cameraX);
+          int y2 = (int)(nodes[connectingNodeId].worldY - cameraY);
+          sprite.drawLine(x1, y1, x2, y2, TFT_DARKGREY);
+        }
+
+        // Get the color and radius of current node
+        uint32_t nodeColor = getNodeColor(currentNode.type);
+        nodeRadius = getNodeRadius(currentNode.type);
+
+        // Draw the Node
+        sprite.fillCircle(screenX, screenY, nodeRadius, nodeColor);
+
+        // If node is selected, highlight it
+        if (i == selectedNode) {
+          sprite.drawCircle(screenX, screenY, nodeRadius + 4, TFT_WHITE);
+        }
+      }
+    }
+  }
+
+  // Push constructed frame
+  sprite.pushSprite(0, 0);
+}
+
+void initializeTraces() {
+  int randomNode = random(9, 23);
+
+  tracePosition[0] = randomNode;
+  randomNode = random(9, 23);
+
+  while (tracePosition[1] == -1) {
+    if (randomNode == tracePosition[0]) {
+      randomNode = random(9, 23);
+    } else {
+      tracePosition[1] = randomNode;
+    }
+  }
+
+}
+
 void setup() {
+  
+  M5.begin();
+
+  if (!gamepad.begin(0x50)) {
+    Serial.print("Seesaw not found");
+    while(1);
+  }
+
+  // Sprite frame Generator
+  sprite.createSprite(320, 240);
+
+  // Random seed generator
+  randomSeed(analogRead(0));
+
   //////////////////////////////////////////////////////
   // Initialize the arrays of connecting nodes
   //////////////////////////////////////////////////////
@@ -111,5 +273,162 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  switch(currentStatus) {
+    case HACKER_SELECT:       handleHackerSelect(); break;
+    case GAME_IN_PROGRESS:    handleGameplay(); break;
+    case GAME_OVER:           handleGameOver(); break;
+  }
+  drawScreen();
+
+}
+
+
+//////////////////////////////////////////////////////
+// Functions that handle the different states of the game
+//////////////////////////////////////////////////////
+void handleHackerSelect() {
+  if (hackerPosition == -1) {
+      hackerPosition = 0;
+      initializeTraces();
+      nodes[hackerPosition].occupant = HACKER;
+      currentStatus = GAME_IN_PROGRESS;
+  }
+}
+
+void handleGameplay() {
+  switch(currentTurn) {
+    case HACKER_TURN: handleHackerTurn(); break;
+    case DEFENDER_TURN: handleDefenderTurn(); break;
+  }
+}
+
+// Need to move the display logic into drawScreen function to have all display logic into one function
+// Needs to check the status of the game and draw screen based off that check
+void handleGameOver() {
+
+}
+
+
+//////////////////////////////////////////////////////
+// Functions that run depending on whose turn it is
+//////////////////////////////////////////////////////
+
+void handleHackerTurn() {
+
+}
+
+void handleDefenderTurn() {
+  // Reads the inputs every frame 
+  int joyX = 1023 - gamepad.analogRead(14);
+  int joyY = gamepad.analogRead(15);
+
+  // Trying to fix stick drift in MAP_VIEW
+  int dx = joyX - 512;
+  int dy = joyY - 512;
+
+  int deadzone = 45;
+
+  if (abs(dx) < deadzone) dx = 0;
+  if (abs(dy) < deadzone) dy = 0;
+
+  // Trying to invert the controls and fix map
+  // int joyX = gamepad.analogRead(14);
+  // int joyY = 1023 - gamepad.analogRead(15);
+
+  uint32_t buttons = gamepad.digitalReadBulk(0xFFFFFFFF);
+
+  // Joystick: check if pushed past a deadzone threshold
+  bool pushingLeft = joyX < 412;
+  bool pushingRight = joyX > 612;
+  bool pushingUp = joyY < 412;
+  bool pushingDown = joyY > 612;
+
+  // Buttons: LOW means pressed (active low)
+  bool startPressed = !(buttons & (1UL << BUTTON_START));
+  bool selectPressed = !(buttons & (1UL << BUTTON_SELECT));
+  bool bPressed = !(buttons & (1UL << BUTTON_B));
+
+  if(defenderState == MAP_VIEW) {
+    float speed = 0.1f;
+    // Trying to invert the controls and fix map
+    cameraX += dx * speed;
+    cameraY += dy * speed;
+    
+    // Prevents the user from scrolling off the map
+    cameraX = constrain(cameraX, 0, 580);
+    cameraY = constrain(cameraY, 0, 660);
+
+    static bool lastStart = false;
+    static bool lastSelect = false;
+    // Goes to NODE_SELECT mode
+    if (startPressed && !lastStart) {
+      defenderState = NODE_SELECT;
+      Serial.printf("Switching mode to: %d/n", defenderState);
+    } 
+    lastStart = startPressed;
+
+    // Goes to TOOL_SELECT mode
+    if (selectPressed && !lastSelect) {
+      defenderState = TOOL_SELECT;
+      Serial.printf("Switching mode to: %d/n", defenderState);
+    }
+    lastSelect = selectPressed;
+
+
+  } else if (defenderState == TOOL_SELECT) {
+
+    // Goes to NODE_SELECT mode
+    if (startPressed) {
+      defenderState = NODE_SELECT;
+    } 
+
+    // Returns to MAP_VIEW mode
+    if (selectPressed) {
+      defenderState = MAP_VIEW;
+    }
+
+    return;
+  } else {
+    // Reset camera position to center on the selectedNode 
+    cameraX = nodes[selectedNode].worldX - 160;
+    cameraY = nodes[selectedNode].worldY - 120;
+    Serial.print("Reseting Position");
+
+    // Returns back to MAP_VIEW mode
+    if (startPressed) {
+      defenderState = MAP_VIEW;
+    } 
+
+    // Goes to TOOL_SELECT mode
+    if (selectPressed) {
+      defenderState = TOOL_SELECT;
+    }
+
+    return;
+  }
+  
+}
+
+//////////////////////////////////////////////////////
+// Resets the game
+//////////////////////////////////////////////////////
+void resetGame() {
+    hackerPosition = -1;
+    tracePosition[0] = -1;
+    tracePosition[1] = -1;
+    activeTraces = 0;
+    selectedNode = -1;
+    speedBoostUsage = 2;
+    speedBoostDuration = 0;
+    nodeLockUsage = 3;
+    pingScanUsage = 3;
+    currentTurn = DEFENDER_TURN;
+    currentStatus = HACKER_SELECT;
+
+    // Reset all node occupants and locks
+    for (int i = 0; i < 24; i++) {
+        nodes[i].occupant = NONE;
+        nodes[i].traceCount = 0;
+        nodes[i].isLocked = false;
+    }
 }
