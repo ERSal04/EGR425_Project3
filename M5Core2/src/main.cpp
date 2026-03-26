@@ -16,7 +16,10 @@ Adafruit_seesaw gamepad;
 #define BUTTON_A  5
 #define BUTTON_B  1
 #define BUTTON_START 16
-#define BUTTON_SELECT 14
+#define BUTTON_SELECT 0
+uint32_t button_mask = (1UL << BUTTON_X) | (1UL << BUTTON_Y) | 
+                       (1UL << BUTTON_START) | (1UL << BUTTON_A) | 
+                       (1UL << BUTTON_B) | (1UL << BUTTON_SELECT);
 
 enum NodeType { NORMAL, ENTRY, JUNCTION, CORE };
 enum Occupant { NONE, HACKER, TRACE };
@@ -57,15 +60,16 @@ void handleDefenderTurn();
 //////////////////////////////////////////////////////
 Node nodes[24];
 
-int hackerPosition = -1;
-int tracePosition[2] = {-1, -1};
+int hackerPosition = -1; // Hackers current position
+int tracePositions[2] = {-1, -1}; // Array containing the positions of the tracers
 int selectedTrace = 0; // which trace (0 or 1) is being moved
-int activeTraces = 0;
-int selectedNode = 23;
-int speedBoostUsage = 2;
-int speedBoostDuration = 0;
-int nodeLockUsage = 3;
-int pingScanUsage = 3;
+int connectionIndex = -1; // Index that helps cycle through neighboring nodes
+int activeTraces = 0; // Count of how many active traces
+int selectedNode = -1; // Selected Node to make an action on
+int speedBoostUsage = 2; // Count of how many speed boosts left
+int speedBoostDuration = 0; // Count of how long the speed boost is active for
+int nodeLockUsage = 3; // Count of how many nodes can be locked
+int pingScanUsage = 3; // Number of ping scans left
 
 enum gameStatus { HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER };
 gameStatus currentStatus = HACKER_SELECT;
@@ -172,9 +176,25 @@ void drawScreen() {
         // Draw the Node
         sprite.fillCircle(screenX, screenY, nodeRadius, nodeColor);
 
-        // If node is selected, highlight it
-        if (i == selectedNode) {
+        // Indicate if the node contains a trace
+        if(currentNode.traceCount > 0) {
+          sprite.fillCircle(screenX, screenY, nodeRadius - 2, TFT_PURPLE);
+        }
+
+        // If selected Node contains a trace, expand the Purple
+        if (i == selectedNode && currentNode.traceCount > 0) {
+          sprite.fillCircle(screenX, screenY, nodeRadius, TFT_PURPLE);
+        } else if (i == selectedNode) {
+          // If node is selected, highlight it
           sprite.drawCircle(screenX, screenY, nodeRadius + 4, TFT_WHITE);
+        }
+
+        if(defenderState == NODE_SELECT) {
+          sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
+          sprite.setTextColor(TFT_WHITE);
+          sprite.setCursor(5, 218);
+          sprite.printf("T%d < Node %d > B:Move", 
+              selectedTrace, selectedNode);
         }
       }
     }
@@ -184,17 +204,23 @@ void drawScreen() {
   sprite.pushSprite(0, 0);
 }
 
+// Initializes traces randomly
+// Never initializes the tracs on the same node, low level nodes, entry nodes, or core node
 void initializeTraces() {
-  int randomNode = random(9, 23);
+  int randomNode = random(9, 22);
 
-  tracePosition[0] = randomNode;
-  randomNode = random(9, 23);
+  tracePositions[0] = randomNode;
+  nodes[randomNode].traceCount++;
+  nodes[randomNode].occupant = TRACE;
+  randomNode = random(9, 22);
 
-  while (tracePosition[1] == -1) {
-    if (randomNode == tracePosition[0]) {
-      randomNode = random(9, 23);
+  while (tracePositions[1] == -1) {
+    if (randomNode == tracePositions[0]) {
+      randomNode = random(9, 22);
     } else {
-      tracePosition[1] = randomNode;
+      tracePositions[1] = randomNode;
+      nodes[randomNode].traceCount++;
+      nodes[randomNode].occupant = TRACE;
     }
   }
 
@@ -208,6 +234,9 @@ void setup() {
     Serial.print("Seesaw not found");
     while(1);
   }
+
+  gamepad.pinModeBulk(button_mask, INPUT_PULLUP);
+  gamepad.setGPIOInterrupts(button_mask, 1);
 
   // Sprite frame Generator
   sprite.createSprite(320, 240);
@@ -327,7 +356,6 @@ void handleDefenderTurn() {
   int dy = joyY - 512;
 
   int deadzone = 45;
-
   if (abs(dx) < deadzone) dx = 0;
   if (abs(dy) < deadzone) dy = 0;
 
@@ -347,7 +375,56 @@ void handleDefenderTurn() {
   bool startPressed = !(buttons & (1UL << BUTTON_START));
   bool selectPressed = !(buttons & (1UL << BUTTON_SELECT));
   bool bPressed = !(buttons & (1UL << BUTTON_B));
+  bool yPressed = !(buttons & (1UL << BUTTON_Y));
 
+  // Debounce for the buttons
+  static bool lastStart = false;
+  static bool lastSelect = false;
+  static bool lastB = false;
+  static bool lastY = false;
+
+  // Debounce for the joystick
+  static bool lastPushLeft = false;
+  static bool lastPushRight = false;
+
+  bool startJustPressed = startPressed && !lastStart;
+  bool selectJustPressed = selectPressed && !lastSelect;
+  bool bJustPressed = bPressed && !lastB;
+  bool yJustPressed = yPressed && !lastY;
+
+  bool leftJustPushed = pushingLeft && !lastPushLeft;
+  bool rightJustPushed = pushingRight && !lastPushRight;
+  
+  static unsigned long lastDebounceTime = 0;
+  unsigned long debounceDelay = 200; // ms
+
+  if (startJustPressed || selectJustPressed || bJustPressed || 
+      yJustPressed || leftJustPushed || rightJustPushed) {
+
+      unsigned long now = millis();
+      if (now - lastDebounceTime < debounceDelay) {
+          // Too soon — ignore this press
+          startJustPressed = false;
+          selectJustPressed = false;
+          bJustPressed = false;
+          yJustPressed = false;
+          leftJustPushed = false; 
+          rightJustPushed = false;
+      } else {
+          lastDebounceTime = now;
+      }
+  }
+
+  lastStart = startPressed;
+  lastSelect = selectPressed;
+  lastB = bPressed;
+  lastY = yPressed;
+  lastPushLeft = pushingLeft;
+  lastPushRight = pushingRight;
+
+  ////////////////////////////////////////////////////////////////
+  // MAP VIEW MODE
+  ////////////////////////////////////////////////////////////////
   if(defenderState == MAP_VIEW) {
     float speed = 0.1f;
     // Trying to invert the controls and fix map
@@ -358,55 +435,166 @@ void handleDefenderTurn() {
     cameraX = constrain(cameraX, 0, 580);
     cameraY = constrain(cameraY, 0, 660);
 
-    static bool lastStart = false;
-    static bool lastSelect = false;
-    // Goes to NODE_SELECT mode
-    if (startPressed && !lastStart) {
+    ////////////////////////////////////////////////////////////////
+    // GOES TO NODE SELECT MODE
+    ////////////////////////////////////////////////////////////////
+    if (startJustPressed) {
+
+      // Check if traces have been initialized, if not initialize them
+      if(tracePositions[0] == -1 && tracePositions[1] == -1) {
+        initializeTraces();
+      }
+
+      // Initializes the nodes that are able to be highlighted
+      connectionIndex = -1;
+      // selectedNode = nodes[tracePositions[selectedTrace]].connectionCount - 1;
+
       defenderState = NODE_SELECT;
-      Serial.printf("Switching mode to: %d/n", defenderState);
     } 
-    lastStart = startPressed;
 
-    // Goes to TOOL_SELECT mode
-    if (selectPressed && !lastSelect) {
+    ////////////////////////////////////////////////////////////////
+    // GOES TO TOOL SELECT MODE
+    ////////////////////////////////////////////////////////////////
+    if (selectJustPressed) {
       defenderState = TOOL_SELECT;
-      Serial.printf("Switching mode to: %d/n", defenderState);
     }
-    lastSelect = selectPressed;
 
-
+  ////////////////////////////////////////////////////////////////
+  // TOOL SELECT MODE
+  ////////////////////////////////////////////////////////////////
   } else if (defenderState == TOOL_SELECT) {
 
-    // Goes to NODE_SELECT mode
-    if (startPressed) {
+    ////////////////////////////////////////////////////////////////
+    // GOES TO NODE SELECT MODE
+    ////////////////////////////////////////////////////////////////
+    if (startJustPressed) {
       defenderState = NODE_SELECT;
     } 
 
-    // Returns to MAP_VIEW mode
-    if (selectPressed) {
+    ////////////////////////////////////////////////////////////////
+    // RETURNS TO MAP VIEW FROM TOOL SELECT
+    ////////////////////////////////////////////////////////////////
+    if (selectJustPressed) {
       defenderState = MAP_VIEW;
     }
 
-    return;
+  ////////////////////////////////////////////////////////////////
+  // NODE SELECT MODE
+  //////////////////////////////////////////////////////////////// 
   } else {
-    // Reset camera position to center on the selectedNode 
-    cameraX = nodes[selectedNode].worldX - 160;
-    cameraY = nodes[selectedNode].worldY - 120;
-    Serial.print("Reseting Position");
 
-    // Returns back to MAP_VIEW mode
-    if (startPressed) {
+    // NEED TO DRAW AN INDICATOR WHERE THE TRACE NODES AREEEE
+    // NEED TO BE ABLE TO VIEW THE SELECTED TRACES POSITION INSTEAD OF JUST THE NEIGHTBORING NODES
+
+    // Sets the camera position to the selectedTrace's position 
+    if(selectedNode == -1 && connectionIndex != -1) {
+      // Reset camera position to center on the selectedTrace 
+      cameraX = nodes[tracePositions[selectedTrace]].worldX - 160;
+      cameraY = nodes[tracePositions[selectedTrace]].worldY - 120;
+    } else if (selectedNode != -1) {
+      // Sets the camera position to view the neighboring nodes/selectedNode
+      cameraX = nodes[selectedNode].worldX - 160;
+      cameraY = nodes[selectedNode].worldY - 120;
+    }
+
+    // Switch to view a different trace and see the connected nodes
+    if(yJustPressed) {
+      // Reset the connection index to prevent outofbounds scenario
+      connectionIndex = -1;
+      if(selectedTrace == 1) {
+        selectedTrace = 0;
+      } else {
+        selectedTrace ++;
+      }
+      // Change camera position based off of selected trace
+      cameraX = nodes[tracePositions[selectedTrace]].worldX - 160;
+      cameraY = nodes[tracePositions[selectedTrace]].worldY - 120;
+    }
+
+    // Increment the connectionIndex to cycle through connecting nodes
+    if(rightJustPushed) {
+      // Check to wrap around the nodes array size
+      if(connectionIndex != nodes[tracePositions[selectedTrace]].connectionCount - 1) {
+        connectionIndex++;
+      } else {
+        connectionIndex = -1;
+      }
+    } 
+
+    // Decrement the connectionIndex to cycle through connecting nodes
+    if(leftJustPushed) {
+      // Check to wrap around the nodes array size
+      if(connectionIndex != -1) {
+        connectionIndex--; 
+      } else {
+        connectionIndex = nodes[tracePositions[selectedTrace]].connectionCount - 1;
+      }
+    }
+
+    // Update selectedNode to one of the neighboring nodes to selectedTrace's node
+    if(connectionIndex == -1) {
+      selectedNode = tracePositions[selectedTrace];
+    } else {
+      selectedNode = nodes[tracePositions[selectedTrace]].connections[connectionIndex];
+    }
+
+    // If B was pressed, move trace position to selected node and end turn
+    //////////////////////////////////////////////
+    // B PRESSED: Confirms action with checks
+    //            to verify if action id valid
+    /////////////////////////////////////////////
+    if(bJustPressed) {
+
+      if (connectionIndex == -1) {
+        // Can not confirm no neighbor selected yet
+      } else if (nodes[selectedNode].isLocked) {
+        // Check to see if desired destination node is locked before allowing move
+
+        // Display warning text that says "Cannot move. Node is locked"
+
+      } else {
+
+        // Decrease the count of traces on selectedTrace's node before updating the selectedTrace's position 
+        nodes[tracePositions[selectedTrace]].traceCount--;
+        nodes[tracePositions[selectedTrace]].occupant = NONE;
+
+        // Update selectedTrace's position to new node
+        tracePositions[selectedTrace] = selectedNode;
+
+        // Check if the trace landed on hacker position
+        if (tracePositions[selectedTrace] == hackerPosition) {
+          currentStatus = GAME_OVER;
+          handleGameOver();
+        } else {
+          // Increment new selectedTrace's current node's trace count
+          nodes[tracePositions[selectedTrace]].traceCount++;
+          nodes[tracePositions[selectedTrace]].occupant = TRACE;
+        }
+
+        // End turn for defender
+        currentTurn = HACKER_TURN;
+
+        // Return to MAP_VIEW for defender
+        defenderState = MAP_VIEW;
+      }
+    }
+
+    ////////////////////////////////////////////////////////////////
+    // RETURNS TO MAP VIEW
+    ////////////////////////////////////////////////////////////////
+    if (startJustPressed) {
       defenderState = MAP_VIEW;
     } 
 
-    // Goes to TOOL_SELECT mode
-    if (selectPressed) {
+    ////////////////////////////////////////////////////////////////
+    // GOES TO TOOL SELECT MODE
+    ////////////////////////////////////////////////////////////////
+    if (selectJustPressed) {
       defenderState = TOOL_SELECT;
     }
 
-    return;
   }
-  
+
 }
 
 //////////////////////////////////////////////////////
@@ -414,8 +602,8 @@ void handleDefenderTurn() {
 //////////////////////////////////////////////////////
 void resetGame() {
     hackerPosition = -1;
-    tracePosition[0] = -1;
-    tracePosition[1] = -1;
+    tracePositions[0] = -1;
+    tracePositions[1] = -1;
     activeTraces = 0;
     selectedNode = -1;
     speedBoostUsage = 2;
