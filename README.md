@@ -22,7 +22,23 @@ The **Hacker** (phone) must navigate node-by-node through a network graph to rea
 | **Win Screen** | `ACCESS GRANTED ✓` | `TARGET TRACED ✓` |
 | **Lose Screen** | `CONNECTION TERMINATED ✗` | `SYSTEM BREACHED ✗` |
 | **Input Method** | Tap nodes on Flutter canvas to move | Touch screen to deploy traces & use tools |
-| **Tools** | Spoof, Tunnel, Firewall Break | Speed Boost, Node Lock, Ping Scan |
+| **Tools** | Spoof, Tunnel, Crack | Speed Boost, Node Lock, Ping Scan |
+| **Hacker Tool Explained** |
+Crack unlocks a locked node
+Tunnel Allows hacker to move to one of the starting node
+Spoof Has 3 uses
+  On next turn, if defender uses ping, it will show that they are on a different node than they actually are
+  one turn cooldown
+
+| **Defender Tool Explained** |
+Ping scan has 3 uses
+  On the next defender turn it recieves hackers location
+  Notifies hacker location is exposed
+  one turn cooldown
+Speed boost
+  Defender traces moves 2 in one turn rather than 1 node per turn, for small duration
+Node lock
+  locks node so hacker cannot enter
 
 ---
 

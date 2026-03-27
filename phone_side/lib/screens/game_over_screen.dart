@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/game_state.dart';
 
 class GameOverScreen extends StatelessWidget {
-  const GameOverScreen({Key? key}) : super(key: key);
+  const GameOverScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +74,7 @@ class GameOverScreen extends StatelessWidget {
                       ),
                       _StatLine(
                         'Tools Used:',
-                        '${(1 - gameState.spoofUsesRemaining) + (1 - gameState.tunnelUsesRemaining) + (1 - gameState.firewallBreakUsesRemaining)}',
+                        '${(1 - gameState.spoofUsesRemaining) + (1 - gameState.tunnelUsesRemaining) + (1 - gameState.crackUsesRemaining)}',
                       ),
                       _StatLine(
                         'Final Position:',
