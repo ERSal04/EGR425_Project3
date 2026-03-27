@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/game_state.dart';
 
 class ConnectionScreen extends StatelessWidget {
-  const ConnectionScreen({Key? key}) : super(key: key);
+  const ConnectionScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

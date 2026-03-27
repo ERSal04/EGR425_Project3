@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/game_state.dart';
 
 class EntrySelectionScreen extends StatelessWidget {
-  const EntrySelectionScreen({Key? key}) : super(key: key);
+  const EntrySelectionScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
