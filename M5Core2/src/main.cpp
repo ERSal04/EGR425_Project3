@@ -1,6 +1,28 @@
 #include <Arduino.h>
 #include <M5Core2.h>
 #include <Adafruit_seesaw.h>
+#include <EEPROM.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
+//////////////////////////////////////////////////////
+// Shared BLE Protocol (must match client)
+//////////////////////////////////////////////////////
+static BLEUUID SERVICE_UUID("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
+static BLEUUID CHAR_DEFENDER_UUID("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+static BLEUUID CHAR_HACKER_UUID ("beb5483e-36e1-4688-b7f5-ea07361b26a9");
+static const char *SERVER_NAME = "HACKER_DEFENDER_GAME";
+
+///////////////////////////////////////////////////////////////
+// BLE Server State
+///////////////////////////////////////////////////////////////
+BLEServer* bleServer = nullptr;
+BLEService* bleService = nullptr; 
+BLECharacteristic* defenderChar = nullptr;
+BLECharacteristic* hackerChar = nullptr;
+bool deviceConnected = false;
 
 //////////////////////////////////////////////////////
 // Sprite Decleration
@@ -46,6 +68,7 @@ void drawScreen();
 void initializeTraces();
 
 // Handles the different states of the game
+void handleWaitingToConnect();
 void handleHackerSelect();
 void handleGameplay();
 void handleGameOver();
@@ -54,6 +77,11 @@ void resetGame();
 // Handles switching between player turns
 void handleHackerTurn();
 void handleDefenderTurn();
+
+// BLE functions
+void startBleServer();
+void restartAdvertising();
+void sendDefenderState();
 
 //////////////////////////////////////////////////////
 // Variable Declarations
@@ -70,11 +98,15 @@ int speedBoostUsage = 2; // Count of how many speed boosts left
 int speedBoostDuration = 0; // Count of how long the speed boost is active for
 int nodeLockUsage = 3; // Count of how many nodes can be locked
 int pingScanUsage = 3; // Number of ping scans left
+bool gameOverNotified = false; // Notifies client that game is over
 
-enum gameStatus { HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER };
-gameStatus currentStatus = HACKER_SELECT;
+enum gameStatus { WAITING_TO_CONNECT, HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER };
+// Should be WAITING_TO_CONNECT so screen will show a "lobby" waiting for player
+gameStatus currentStatus = WAITING_TO_CONNECT;
 enum playerTurn { HACKER_TURN, DEFENDER_TURN };
 playerTurn currentTurn = DEFENDER_TURN;
+enum gameResult { NONE_RESULT, HACKER_WIN, DEFENDER_WIN };
+gameResult result = NONE_RESULT;
 
 enum defenderUIState { 
     MAP_VIEW,      // free roam, joystick pans camera
@@ -132,17 +164,160 @@ int getNodeRadius(NodeType type) {
     }
 }
 
+///////////////////////////////////////////////////////////////
+// BLE Callbacks
+///////////////////////////////////////////////////////////////
+class ServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer *pServer) override {
+    (void)pServer;
+    deviceConnected = true;
+    currentStatus = HACKER_SELECT;
+  }
+
+  void onDisconnect(BLEServer *pServer) override {
+    (void)pServer;
+    deviceConnected = false;
+    currentStatus = WAITING_TO_CONNECT;
+    // Create a function to restart advertising for a reconnect
+    restartAdvertising();
+  }
+};
+
+class HackerWriteCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pCharacteristic) override {
+    String uuid = pCharacteristic->getUUID().toString().c_str();
+    String value = pCharacteristic->getValue().c_str();
+
+    // Check if we get the hacker's UUID
+    if(!uuid.equalsIgnoreCase(CHAR_HACKER_UUID.toString().c_str())) {
+      return;
+    }
+
+    // Extract ID after "N"
+    int pipeIndex = value.lastIndexOf('|');
+    int nodeId = value.substring(1, pipeIndex).toInt();
+
+    // Extract tool after "TOOL:"
+    String tool = value.substring(value.indexOf(':') + 1);
+
+    // Update game state
+    hackerPosition = nodeId;
+
+    // Check if Hacker made it to Core node
+    if(nodes[hackerPosition].type == CORE ) {
+      result = HACKER_WIN;
+      currentStatus = GAME_OVER;
+    }
+
+    // Chnage to Defender's turn
+    currentTurn = DEFENDER_TURN;
+
+    // Apply tool if used
+    if (tool != "none") {
+      // Handle tool
+    }
+  }
+};
+
 void drawScreen() {
 
   sprite.fillScreen(TFT_BLACK);
-
-  if (currentStatus == GAME_OVER) {
+  
+  if(currentStatus == WAITING_TO_CONNECT) {
     sprite.fillScreen(TFT_BLACK);
-    sprite.print("GAME OVER");
 
-    if (M5.BtnA.wasPressed()) {
-      currentStatus = HACKER_SELECT;
+    sprite.setTextSize(2);
+
+    for(int i = 0; i < 10; i++) {
+      int x = random(0, 320);
+      int y = random(0, 240);
+      sprite.setCursor(x, y);
+      sprite.print(random(0, 2)); // random 0/1
     }
+
+    // MATRIX RAIN BACKGROUND
+    for(int i = 0; i < 15; i++) {
+      sprite.setTextColor(TFT_DARKGREEN);
+      sprite.setCursor(random(0, 320), random(0, 240));
+      sprite.print(random(0, 2));
+    }
+
+    sprite.setTextColor(TFT_GREEN, TFT_BLACK);
+
+    sprite.setCursor(40, 80);
+    sprite.print("INITIALIZING...");
+
+    sprite.setCursor(20, 110);
+    sprite.print("AWAITING CONNECTION");
+
+    // Animated dots (simple loop animation)
+    int dots = (millis() / 500) % 4; // 0–3 dots
+
+    sprite.setCursor(260, 110);
+    for(int i = 0; i < dots; i++) {
+      sprite.print(".");
+    }
+
+    // Bottom "matrix bar"
+    sprite.drawRect(10, 180, 300, 20, TFT_GREEN);
+    int progress = (millis() / 50) % 300;
+    sprite.fillRect(10, 180, progress, 20, TFT_GREEN);
+
+  } else if (currentStatus == GAME_OVER) {
+    sprite.fillScreen(TFT_BLACK);
+
+    bool blink = (millis() / 400) % 2;
+
+    sprite.setTextSize(2);
+
+    if(result == HACKER_WIN) {
+      // HACKER WIN (RED MATRIX ALERT)
+      sprite.setTextColor(blink ? TFT_RED : TFT_DARKGREY);
+
+      sprite.setCursor(40, 60);
+      sprite.print("CORE BREACHED");
+
+      sprite.setTextColor(TFT_RED);
+      sprite.setCursor(30, 100);
+      sprite.print("SYSTEM FAILURE");
+
+      sprite.setTextSize(1);
+      sprite.setCursor(20, 140);
+      sprite.print("> ROOT ACCESS GRANTED");
+
+    } else if(result == DEFENDER_WIN) {
+      // DEFENDER WIN (GREEN MATRIX SUCCESS)
+      sprite.setTextColor(blink ? TFT_GREEN : TFT_DARKGREEN);
+
+      sprite.setCursor(40, 60);
+      sprite.print("TRACE COMPLETE");
+
+      sprite.setTextColor(TFT_GREEN);
+      sprite.setCursor(20, 100);
+      sprite.print("INTRUDER ELIMINATED");
+
+      sprite.setTextSize(1);
+      sprite.setCursor(20, 140);
+      sprite.print("> SYSTEM SECURED");
+
+    }
+
+    // Bottom prompt
+    sprite.setTextSize(1);
+    sprite.setTextColor(TFT_WHITE);
+    sprite.setCursor(40, 200);
+    sprite.print("Press A to reboot");
+
+    // Resets game after M5 BTNA was pressed
+    if (M5.BtnA.wasPressed()) {
+      resetGame();
+    }
+
+    // Optional scanlines (adds CRAZY polish)
+    // for(int y = 0; y < 240; y += 4) {
+    //   sprite.drawFastHLine(0, y, 320, TFT_DARKGREY);
+    // }
+
   } else if(currentStatus == HACKER_SELECT) {
     sprite.print("Waiting for Hacker...");
   } else {
@@ -193,8 +368,15 @@ void drawScreen() {
           sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
           sprite.setTextColor(TFT_WHITE);
           sprite.setCursor(5, 218);
-          sprite.printf("T%d < Node %d > B:Move", 
+          sprite.printf("T%d < Node %d > B:Move | Y:Switch Trace", 
               selectedTrace, selectedNode);
+        }
+
+        if(defenderState == TOOL_SELECT) {
+          sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
+          sprite.setTextColor(TFT_RED);
+          sprite.setCursor(80, 218);
+          sprite.printf("TOOL_SELECT IS NOT AVAILABLE");
         }
       }
     }
@@ -242,7 +424,10 @@ void setup() {
   sprite.createSprite(320, 240);
 
   // Random seed generator
-  randomSeed(analogRead(0));
+  int seedAddress = 0;
+  long seed = EEPROM.read(seedAddress);
+  randomSeed(seed);
+  EEPROM.write(seedAddress, seed+ 1);
 
   //////////////////////////////////////////////////////
   // Initialize the arrays of connecting nodes
@@ -299,10 +484,15 @@ void setup() {
   nodes[21] = makeNode(21, 650, 120, NORMAL, c21, 3);
   nodes[22] = makeNode(22, 450, 160, NORMAL, c22, 5);
   nodes[23] = makeNode(23, 450, 450, CORE, c23, 4);
+
+  BLEDevice::init(SERVER_NAME);
+  startBleServer();
+
 }
 
 void loop() {
   switch(currentStatus) {
+    case WAITING_TO_CONNECT:   handleWaitingToConnect(); break;
     case HACKER_SELECT:       handleHackerSelect(); break;
     case GAME_IN_PROGRESS:    handleGameplay(); break;
     case GAME_OVER:           handleGameOver(); break;
@@ -311,16 +501,97 @@ void loop() {
 
 }
 
+///////////////////////////////////////////////////////////////
+// BLE setup
+///////////////////////////////////////////////////////////////
+void startBleServer() {
+  bleServer = BLEDevice::createServer();
+  bleServer->setCallbacks(new ServerCallbacks());
+
+  bleService = bleServer->createService(SERVICE_UUID);
+
+  defenderChar = bleService->createCharacteristic(
+    CHAR_DEFENDER_UUID,
+    BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_NOTIFY |
+      BLECharacteristic::PROPERTY_INDICATE);
+  defenderChar->addDescriptor(new BLE2902());
+  defenderChar->setValue("240-120");
+
+  hackerChar = bleService->createCharacteristic(
+    CHAR_HACKER_UUID,
+    BLECharacteristic::PROPERTY_WRITE);
+  hackerChar->setCallbacks(new HackerWriteCallbacks());
+
+  bleService->start();
+  restartAdvertising();
+}
+
+void restartAdvertising() {
+  BLEAdvertising *advertising = BLEDevice::getAdvertising();
+  advertising->stop();
+  advertising->addServiceUUID(SERVICE_UUID);
+  advertising->setScanResponse(true);
+  advertising->setMinPreferred(0x06);
+  advertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+  Serial.println("[SERVER] Advertising started.");
+}
+
+void sendDefenderState() {
+  if(!deviceConnected || defenderChar == nullptr) return;
+
+  // Build trace positions string
+  String payload = "T" + String(tracePositions[0]) +
+                   "," + String(tracePositions[1]);
+
+  // Add locked node (-1 if none locked)
+  int lockedNode = -1;
+  for (int i = 0; i < 24; i++) {
+    if (nodes[i].isLocked) {
+      lockedNode = i;
+      break;
+    }
+  }
+  payload += "|L" + String(lockedNode);
+
+  // Add game status
+  if(currentStatus == GAME_OVER) {
+    if(result == DEFENDER_WIN) {
+      payload += "|SWIN"; // Defender wins
+    } else if(result == HACKER_WIN) {
+      payload += "|HWIN";
+    }
+  } else {
+    payload += "|SPLAY";
+  }
+
+  defenderChar->setValue(payload.c_str());
+  defenderChar->notify();
+
+  Serial.printf("[SERVER] Sent: %s\n", payload.c_str());
+}
 
 //////////////////////////////////////////////////////
 // Functions that handle the different states of the game
 //////////////////////////////////////////////////////
+void handleWaitingToConnect() {
+  // TODO: implement logic
+}
+
 void handleHackerSelect() {
-  if (hackerPosition == -1) {
-      hackerPosition = 0;
-      initializeTraces();
-      nodes[hackerPosition].occupant = HACKER;
-      currentStatus = GAME_IN_PROGRESS;
+  // Initializes the hacker to a selected node
+  // if (hackerPosition == -1) {
+  //     hackerPosition = 0;
+  //     initializeTraces();
+  //     nodes[hackerPosition].occupant = HACKER;
+  //     currentStatus = GAME_IN_PROGRESS;
+  // }
+
+  if(hackerPosition != -1) {
+    initializeTraces();
+    nodes[hackerPosition].occupant = HACKER;
+    currentStatus = GAME_IN_PROGRESS;
   }
 }
 
@@ -334,7 +605,14 @@ void handleGameplay() {
 // Need to move the display logic into drawScreen function to have all display logic into one function
 // Needs to check the status of the game and draw screen based off that check
 void handleGameOver() {
+  if(!gameOverNotified) {
+    sendDefenderState();
+    gameOverNotified = true;
+  }
 
+  //  if (M5.BtnA.wasPressed()) {
+  //     resetGame();
+  //   }
 }
 
 
@@ -464,6 +742,8 @@ void handleDefenderTurn() {
   ////////////////////////////////////////////////////////////////
   } else if (defenderState == TOOL_SELECT) {
 
+    // TOOL SELECT FEATURES HERE
+
     ////////////////////////////////////////////////////////////////
     // GOES TO NODE SELECT MODE
     ////////////////////////////////////////////////////////////////
@@ -547,9 +827,10 @@ void handleDefenderTurn() {
 
       if (connectionIndex == -1) {
         // Can not confirm no neighbor selected yet
+
       } else if (nodes[selectedNode].isLocked) {
         // Check to see if desired destination node is locked before allowing move
-
+        
         // Display warning text that says "Cannot move. Node is locked"
 
       } else {
@@ -563,13 +844,16 @@ void handleDefenderTurn() {
 
         // Check if the trace landed on hacker position
         if (tracePositions[selectedTrace] == hackerPosition) {
+          result = DEFENDER_WIN;
           currentStatus = GAME_OVER;
-          handleGameOver();
         } else {
           // Increment new selectedTrace's current node's trace count
           nodes[tracePositions[selectedTrace]].traceCount++;
           nodes[tracePositions[selectedTrace]].occupant = TRACE;
         }
+
+        // Send the new Defender state to the hacker
+        sendDefenderState();
 
         // End turn for defender
         currentTurn = HACKER_TURN;
@@ -612,6 +896,8 @@ void resetGame() {
     pingScanUsage = 3;
     currentTurn = DEFENDER_TURN;
     currentStatus = HACKER_SELECT;
+    gameOverNotified = false;
+    result = NONE_RESULT;
 
     // Reset all node occupants and locks
     for (int i = 0; i < 24; i++) {
