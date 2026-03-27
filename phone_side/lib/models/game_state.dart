@@ -11,6 +11,9 @@ enum GamePhase {
 // Enum for whose turn it is
 enum CurrentTurn { hackerTurn, defenderTurn }
 
+// Enum for tool selection mode
+enum ToolSelectionMode { none, tunnel, crack }
+
 /// GameState manages all hacker-side game data
 /// This is a ChangeNotifier so UI widgets can listen for updates
 class GameState extends ChangeNotifier {
@@ -25,9 +28,14 @@ class GameState extends ChangeNotifier {
   List<int> _lockedNodes = []; // Locked nodes (grey out)
 
   // ========== Hacker Tools ==========
-  int _spoofUsesRemaining = 1;
+  int _spoofUsesRemaining = 3; // Spoof has 3 uses
   int _tunnelUsesRemaining = 1;
-  int _firewallBreakUsesRemaining = 1;
+  int _crackUsesRemaining = 1;
+
+  // ========== Tool Effects ==========
+  bool _spoofActive = false; // Traces misdirected
+  ToolSelectionMode _toolSelectionMode = ToolSelectionMode.none;
+  List<int> _validToolTargets = []; // Valid nodes to select for current tool
 
   // ========== Game Status ==========
   int _timeRemaining = 300; // Seconds
@@ -45,7 +53,10 @@ class GameState extends ChangeNotifier {
   List<int> get lockedNodes => _lockedNodes;
   int get spoofUsesRemaining => _spoofUsesRemaining;
   int get tunnelUsesRemaining => _tunnelUsesRemaining;
-  int get firewallBreakUsesRemaining => _firewallBreakUsesRemaining;
+  int get crackUsesRemaining => _crackUsesRemaining;
+  bool get spoofActive => _spoofActive;
+  ToolSelectionMode get toolSelectionMode => _toolSelectionMode;
+  List<int> get validToolTargets => _validToolTargets;
   int get timeRemaining => _timeRemaining;
   bool get isM5Connected => _isM5Connected;
   String? get errorMessage => _errorMessage;
@@ -56,7 +67,7 @@ class GameState extends ChangeNotifier {
   String get displayDeviceName {
     const maxLength = 20;
     if (_connectedDeviceName.length > maxLength) {
-      return _connectedDeviceName.substring(0, maxLength - 3) + '...';
+      return '${_connectedDeviceName.substring(0, maxLength - 3)}...';
     }
     return _connectedDeviceName;
   }
@@ -104,6 +115,18 @@ class GameState extends ChangeNotifier {
   void useSpoof() {
     if (_spoofUsesRemaining > 0) {
       _spoofUsesRemaining--;
+      _spoofActive = true;
+      showTransientError(
+        'SPOOF activated - next ping shows false location',
+        duration: const Duration(seconds: 2),
+      );
+
+      // Spoof effect lasts until next turn (1 turn cooldown)
+      Future.delayed(const Duration(seconds: 1), () {
+        _spoofActive = false;
+        notifyListeners();
+      });
+
       notifyListeners();
     }
   }
@@ -111,13 +134,75 @@ class GameState extends ChangeNotifier {
   void useTunnel() {
     if (_tunnelUsesRemaining > 0) {
       _tunnelUsesRemaining--;
+      _toolSelectionMode = ToolSelectionMode.tunnel;
+      // Entry nodes are 0, 1, 2, 3
+      _validToolTargets = [0, 1, 2, 3];
+      showTransientError(
+        'TUNNEL active - tap a starting node',
+        duration: const Duration(seconds: 2),
+      );
       notifyListeners();
     }
   }
 
-  void useFirewallBreak() {
-    if (_firewallBreakUsesRemaining > 0) {
-      _firewallBreakUsesRemaining--;
+  void selectTunnelTarget(int entryNodeId) {
+    if (_toolSelectionMode == ToolSelectionMode.tunnel &&
+        _validToolTargets.contains(entryNodeId)) {
+      _hackerCurrentNode = entryNodeId;
+      _toolSelectionMode = ToolSelectionMode.none;
+      _validToolTargets = [];
+      showTransientError(
+        'Tunneled to ${entryNodeId == 0
+            ? 'ENTRY_A'
+            : entryNodeId == 1
+            ? 'ENTRY_B'
+            : entryNodeId == 2
+            ? 'ENTRY_C'
+            : 'ENTRY_D'}',
+        duration: const Duration(seconds: 2),
+      );
+      notifyListeners();
+    }
+  }
+
+  void useCrack() {
+    if (_crackUsesRemaining > 0) {
+      _crackUsesRemaining--;
+      _toolSelectionMode = ToolSelectionMode.crack;
+      // Get locked neighbors
+      final lockedNeighbors =
+          GameState.nodeConnections[_hackerCurrentNode]
+              ?.where((n) => _lockedNodes.contains(n))
+              .toList() ??
+          [];
+      _validToolTargets = lockedNeighbors;
+      if (lockedNeighbors.isEmpty) {
+        showTransientError(
+          'No adjacent locked nodes to crack!',
+          duration: const Duration(seconds: 2),
+        );
+        _toolSelectionMode = ToolSelectionMode.none;
+        _crackUsesRemaining++; // Refund use
+      } else {
+        showTransientError(
+          'CRACK active - tap a locked node to unlock',
+          duration: const Duration(seconds: 2),
+        );
+      }
+      notifyListeners();
+    }
+  }
+
+  void selectCrackTarget(int lockedNodeId) {
+    if (_toolSelectionMode == ToolSelectionMode.crack &&
+        _validToolTargets.contains(lockedNodeId)) {
+      _lockedNodes.remove(lockedNodeId);
+      _toolSelectionMode = ToolSelectionMode.none;
+      _validToolTargets = [];
+      showTransientError(
+        'Node unlocked!',
+        duration: const Duration(seconds: 2),
+      );
       notifyListeners();
     }
   }
@@ -169,9 +254,12 @@ class GameState extends ChangeNotifier {
     _availableNodes = [];
     _tracePositions = [];
     _lockedNodes = [];
-    _spoofUsesRemaining = 1;
+    _spoofUsesRemaining = 3;
     _tunnelUsesRemaining = 1;
-    _firewallBreakUsesRemaining = 1;
+    _crackUsesRemaining = 1;
+    _spoofActive = false;
+    _toolSelectionMode = ToolSelectionMode.none;
+    _validToolTargets = [];
     _timeRemaining = 300;
     _gameWinner = null;
     _errorMessage = null;
@@ -183,6 +271,89 @@ class GameState extends ChangeNotifier {
     _hackerCurrentNode = entryNodeId;
     _gamePhase = GamePhase.playing;
     notifyListeners();
+  }
+
+  /// Define node adjacency map (which nodes connect to which)
+  /// This is the network topology
+  static const Map<int, List<int>> nodeConnections = {
+    // Entry nodes (4 starting points)
+    0: [4, 6],
+    1: [5, 8],
+    2: [6, 11],
+    3: [8, 12],
+    // First ring
+    4: [0, 5, 7],
+    5: [1, 4, 8],
+    6: [0, 2, 9, 11],
+    7: [4, 5, 9, 10],
+    8: [1, 3, 5, 10, 12],
+    // Second ring
+    9: [6, 7, 13, 15],
+    10: [7, 8, 14, 15],
+    11: [2, 6, 13, 16],
+    12: [3, 8, 14, 17],
+    // Chokepoint layer
+    13: [9, 11, 15, 18],
+    14: [10, 12, 15, 19],
+    15: [9, 10, 13, 14, 23], // JUNCTION - all paths funnel to here
+    // Upper paths
+    16: [11, 18, 20],
+    17: [12, 19, 21],
+    18: [13, 16, 19, 22],
+    19: [14, 17, 18, 22],
+    20: [16, 21, 22],
+    21: [17, 20, 22],
+    22: [18, 19, 20, 21],
+    // CORE - ONLY REACHABLE VIA JUNCTION (node 15)
+    23: [15],
+  };
+
+  /// Get neighbor nodes (accessible from hackerCurrentNode)
+  List<int> getAccessibleNeighbors() {
+    if (_hackerCurrentNode < 0) return [];
+    List<int> neighbors = nodeConnections[_hackerCurrentNode] ?? [];
+    // Filter out locked nodes
+    List<int> accessible = neighbors
+        .where((node) => !_lockedNodes.contains(node))
+        .toList();
+    return accessible;
+  }
+
+  /// Move hacker to an adjacent node
+  /// Returns true if successful, false otherwise
+  bool moveToNode(int targetNodeId) {
+    if (_hackerCurrentNode < 0) {
+      showTransientError("Hacker not yet placed!");
+      return false;
+    }
+
+    final neighbors = getAccessibleNeighbors();
+    if (!neighbors.contains(targetNodeId)) {
+      showTransientError("Can only move to adjacent nodes!");
+      return false;
+    }
+
+    if (_lockedNodes.contains(targetNodeId)) {
+      showTransientError("Node is locked! Use Crack to unlock.");
+      return false;
+    }
+
+    _hackerCurrentNode = targetNodeId;
+    if (_spoofActive) {
+      showTransientError(
+        'Move hidden by SPOOF (one turn)',
+        duration: const Duration(milliseconds: 500),
+      );
+    }
+    notifyListeners();
+
+    // Check if hacker reached CORE (node 23) - WIN CONDITION
+    if (targetNodeId == 23) {
+      // Award victory to hacker
+      setGameOver("hacker");
+    }
+
+    return true;
   }
 
   /// Called when hacker attempts to move to a node
