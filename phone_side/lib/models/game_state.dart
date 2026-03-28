@@ -119,11 +119,7 @@ class GameState extends ChangeNotifier {
     _lockedNodes = locked;
     _timeRemaining = timeLeft;
     notifyListeners();
-
-    // Check loss condition: trace on hacker node
-    if (traces.contains(_hackerCurrentNode)) {
-      setGameOver("defender");
-    }
+    // M5 is the authority - game over is sent via HWIN/SWIN status
   }
 
   void useSpoof() {
@@ -311,14 +307,6 @@ class GameState extends ChangeNotifier {
   void setGameOver(String winner) {
     _gameWinner = winner; // "hacker" or "defender"
     _gamePhase = GamePhase.gameOver;
-
-    // Send game over status to M5
-    if (winner == "hacker") {
-      onMoveSend?.call(-1, tool: "GAMEOVER:HACKER");
-    } else if (winner == "defender") {
-      onMoveSend?.call(-1, tool: "GAMEOVER:DEFENDER");
-    }
-
     notifyListeners();
   }
 
@@ -354,7 +342,7 @@ class GameState extends ChangeNotifier {
   }
 
   /// Define node adjacency map (which nodes connect to which)
-  /// This is the network topology
+  /// This is the network topology - matches M5Core2 exactly
   static const Map<int, List<int>> nodeConnections = {
     // Entry nodes (4 starting points)
     0: [4, 6],
@@ -362,9 +350,9 @@ class GameState extends ChangeNotifier {
     2: [6, 11],
     3: [8, 12],
     // First ring
-    4: [0, 5, 7],
-    5: [1, 4, 8],
-    6: [0, 2, 9, 11],
+    4: [0, 6, 7],
+    5: [1, 7, 8],
+    6: [0, 2, 4, 9, 11],
     7: [4, 5, 9, 10],
     8: [1, 3, 5, 10, 12],
     // Second ring
@@ -379,13 +367,13 @@ class GameState extends ChangeNotifier {
     // Upper paths
     16: [11, 18, 20],
     17: [12, 19, 21],
-    18: [13, 16, 19, 22],
-    19: [14, 17, 18, 22],
-    20: [16, 21, 22],
-    21: [17, 20, 22],
-    22: [18, 19, 20, 21],
-    // CORE - ONLY REACHABLE VIA JUNCTION (node 15)
-    23: [15],
+    18: [13, 16, 22],
+    19: [14, 17, 22],
+    20: [16, 22, 23],
+    21: [17, 22, 23],
+    22: [18, 19, 20, 21, 23],
+    // CORE - reachable from node 15, 20, 21, 22
+    23: [15, 20, 21, 22],
   };
 
   /// Get neighbor nodes (accessible from hackerCurrentNode)
@@ -445,30 +433,16 @@ class GameState extends ChangeNotifier {
         duration: const Duration(milliseconds: 500),
       );
     }
-    notifyListeners();
 
-    // ============ CHECK WIN CONDITIONS IMMEDIATELY ============
-    // Check for immediate catch (trace on this node)
-    if (_tracePositions.contains(targetNodeId)) {
-      setGameOver("defender");
-      showPersistentError(
-        'You entered a node with a trace! CONNECTION TERMINATED',
-      );
-      return true; // Move was registered before caught
-    }
+    // Switch to defender's turn BEFORE notifying
+    _currentTurn = CurrentTurn.defenderTurn;
 
-    // Check if hacker reached CORE (node 23) - WIN CONDITION
-    if (targetNodeId == 23) {
-      setGameOver("hacker");
-      return true;
-    }
-
-    // Send move to M5 via BLE
+    // Send move to M5 via BLE - let M5 detect win/loss conditions
     onMoveSend?.call(targetNodeId, tool: "none");
 
-    // TODO: After BLE integration, send move to M5 and switch to defender's turn
-    // For now in debug, switch turns
-    _currentTurn = CurrentTurn.defenderTurn;
+    // NOW notify listeners after move is sent and state is updated
+    notifyListeners();
+
     showTransientError(
       'Waiting for Defender turn...',
       duration: const Duration(seconds: 1),
