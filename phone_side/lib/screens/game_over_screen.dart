@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../main.dart' show DEBUG_MODE;
 import '../models/game_state.dart';
 import '../constants.dart';
 import '../widgets.dart';

@@ -945,36 +945,6 @@ class InteractiveGameMapPainter extends CustomPainter {
     // so no automatic visual effects needed here
   }
 
-  void _drawTraces(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.red.withOpacity(0.8);
-    const radius = 7.0;
-
-    for (final traceNodeId in traceNodes) {
-      if (traceNodeId < nodes.length) {
-        final node = nodes[traceNodeId];
-        final nodeX = (node['x'] as double) * size.width;
-        final nodeY = (node['y'] as double) * size.height;
-        canvas.drawCircle(Offset(nodeX, nodeY), radius, paint);
-
-        // Draw warning X
-        final xPaint = Paint()
-          ..color = Colors.red
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke;
-        canvas.drawLine(
-          Offset(nodeX - 5, nodeY - 5),
-          Offset(nodeX + 5, nodeY + 5),
-          xPaint,
-        );
-        canvas.drawLine(
-          Offset(nodeX - 5, nodeY + 5),
-          Offset(nodeX + 5, nodeY - 5),
-          xPaint,
-        );
-      }
-    }
-  }
-
   @override
   bool shouldRepaint(InteractiveGameMapPainter oldDelegate) {
     return oldDelegate.hackerNode != hackerNode ||

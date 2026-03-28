@@ -44,6 +44,10 @@ class GameState extends ChangeNotifier {
   String? _gameWinner; // "hacker", "defender", or null
   String _connectedDeviceName = "M5Core2";
 
+  // ========== BLE Callbacks ==========
+  Function(int nodeId, {String tool})?
+  onMoveSend; // Callback to send moves to M5
+
   // ========== Getters ==========
   GamePhase get gamePhase => _gamePhase;
   CurrentTurn get currentTurn => _currentTurn;
@@ -272,6 +276,8 @@ class GameState extends ChangeNotifier {
     _isM5Connected = connected;
     if (connected) {
       _connectedDeviceName = deviceName;
+      // Automatically advance to entry selection when M5 connects
+      _gamePhase = GamePhase.selectingEntry;
     }
     notifyListeners();
   }
@@ -305,6 +311,14 @@ class GameState extends ChangeNotifier {
   void setGameOver(String winner) {
     _gameWinner = winner; // "hacker" or "defender"
     _gamePhase = GamePhase.gameOver;
+
+    // Send game over status to M5
+    if (winner == "hacker") {
+      onMoveSend?.call(-1, tool: "GAMEOVER:HACKER");
+    } else if (winner == "defender") {
+      onMoveSend?.call(-1, tool: "GAMEOVER:DEFENDER");
+    }
+
     notifyListeners();
   }
 
@@ -332,6 +346,10 @@ class GameState extends ChangeNotifier {
     _hackerCurrentNode = entryNodeId;
     _gamePhase = GamePhase.playing;
     _currentTurn = CurrentTurn.hackerTurn; // Always start on hacker's turn
+
+    // Send entry selection to M5 via BLE
+    onMoveSend?.call(entryNodeId, tool: "none");
+
     notifyListeners();
   }
 
@@ -444,6 +462,9 @@ class GameState extends ChangeNotifier {
       setGameOver("hacker");
       return true;
     }
+
+    // Send move to M5 via BLE
+    onMoveSend?.call(targetNodeId, tool: "none");
 
     // TODO: After BLE integration, send move to M5 and switch to defender's turn
     // For now in debug, switch turns
