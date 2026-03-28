@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/game_state.dart';
+import '../constants.dart';
+import '../widgets.dart';
 
 class EntrySelectionScreen extends StatelessWidget {
   const EntrySelectionScreen({super.key});
@@ -16,26 +18,21 @@ class EntrySelectionScreen extends StatelessWidget {
     };
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
             // Header with connection status
             _buildHeader(),
-            const SizedBox(height: 32),
+            AppSpacing.spacerXLarge,
 
             // Title
-            const Text(
+            HeadingText(
               'SELECT ENTRY NODE',
-              style: TextStyle(
-                color: Colors.green,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Courier',
-                letterSpacing: 2,
-              ),
+              color: AppColors.neonGreen,
+              fontSize: 20,
             ),
-            const SizedBox(height: 32),
+            AppSpacing.spacerXLarge,
 
             // Entry selection grid
             Expanded(
@@ -67,29 +64,18 @@ class EntrySelectionScreen extends StatelessWidget {
     return Consumer<GameState>(
       builder: (context, gameState, _) {
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: AppSpacing.paddingMedium,
           child: Row(
             children: [
               // Connection indicator
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: gameState.isM5Connected ? Colors.green : Colors.red,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
+              ConnectionIndicator(isConnected: gameState.isM5Connected),
+              AppSpacing.spacerWidthSmall,
               Expanded(
                 child: Text(
                   gameState.displayDeviceName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.green,
-                    fontSize: 12,
-                    fontFamily: 'Courier',
-                  ),
+                  style: AppTextStyles.deviceName,
                 ),
               ),
             ],
@@ -117,42 +103,31 @@ class _EntryNodeButton extends StatelessWidget {
       onTap: () {
         context.read<GameState>().hackerSelectEntry(nodeId);
       },
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.green, width: 2),
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.black87,
-        ),
+      child: GlowContainer(
+        color: AppColors.neonGreen,
+        borderRadius: BorderRadius.circular(8),
+        padding: AppSpacing.paddingMedium,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 40,
               height: 40,
-              decoration: const BoxDecoration(
-                color: Colors.green,
+              decoration: BoxDecoration(
+                color: AppColors.neonGreen,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.neonGreen.withOpacity(0.6),
+                    blurRadius: 8,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.green,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Courier',
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              position,
-              style: const TextStyle(
-                color: Colors.cyan,
-                fontSize: 10,
-                fontFamily: 'Courier',
-              ),
-            ),
+            AppSpacing.spacerMedium,
+            ValueText(label, color: AppColors.neonGreen, fontSize: 14),
+            AppSpacing.spacerSmall,
+            LabelText(position, color: AppColors.cyan, fontSize: 10),
           ],
         ),
       ),

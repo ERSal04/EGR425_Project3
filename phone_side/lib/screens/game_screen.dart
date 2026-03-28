@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../main.dart' show DEBUG_MODE;
 import '../models/game_state.dart';
+import '../constants.dart';
+import '../widgets.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -50,7 +53,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Stack(
           children: [
@@ -58,7 +61,7 @@ class _GameScreenState extends State<GameScreen> {
               children: [
                 // Top bar: Timer and connection
                 _buildTopBar(),
-                const SizedBox(height: 8),
+                AppSpacing.spacerSmall,
 
                 // Main game area with interactive map
                 Expanded(child: _buildGameArea()),
@@ -95,139 +98,81 @@ class _GameScreenState extends State<GameScreen> {
     return Consumer<GameState>(
       builder: (context, gameState, _) {
         return Container(
-          decoration: BoxDecoration(
-            color: Colors.black,
-            border: Border(bottom: BorderSide(color: Colors.cyan, width: 2)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.cyan.withOpacity(0.6),
-                blurRadius: 12,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: AppDecorations.topBarDecoration,
+          padding: AppSpacing.panelPadding,
           child: Row(
             children: [
-              // Connection indicator
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: gameState.isM5Connected
-                      ? Color(0xFF00FF41) // Bright neon green
-                      : Color(0xFFFF0055), // Bright neon red
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          (gameState.isM5Connected
-                                  ? Color(0xFF00FF41)
-                                  : Color(0xFFFF0055))
-                              .withOpacity(0.8),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
+              // Connection indicator and device name
+              ConnectionIndicator(isConnected: gameState.isM5Connected),
+              AppSpacing.spacerWidthSmall,
               Expanded(
                 child: Text(
                   gameState.displayDeviceName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Color(0xFF00FF41),
-                    fontSize: 11,
-                    fontFamily: 'Courier New',
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                    shadows: [
-                      Shadow(
-                        color: Color(0xFF00FF41).withOpacity(0.6),
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
+                  style: AppTextStyles.deviceName,
                 ),
               ),
-              const SizedBox(width: 16),
+              AppSpacing.spacerWidthLarge,
 
-              // Timer
-              Container(
+              // ============ TURN INDICATOR ============
+              GlowContainer(
+                color: gameState.currentTurn == CurrentTurn.hackerTurn
+                    ? AppColors.hackerTurn
+                    : AppColors.defenderTurn,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
+                  horizontal: 12,
                   vertical: 6,
                 ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Color(0xFF00FFFF), width: 2),
-                  borderRadius: BorderRadius.circular(4),
-                  color: Color(0xFF00FFFF).withOpacity(0.05),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0xFF00FFFF).withOpacity(0.5),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
                 child: Text(
-                  gameState.formattedTime,
-                  style: TextStyle(
-                    color: Color(0xFF00FFFF),
-                    fontSize: 12,
-                    fontFamily: 'Courier New',
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                    shadows: [
-                      Shadow(
-                        color: Color(0xFF00FFFF).withOpacity(0.6),
-                        blurRadius: 6,
-                      ),
-                    ],
+                  gameState.currentTurn == CurrentTurn.hackerTurn
+                      ? 'YOUR TURN'
+                      : 'DEF TURN',
+                  style: AppTextStyles.turnIndicator(
+                    color: gameState.currentTurn == CurrentTurn.hackerTurn
+                        ? AppColors.hackerTurn
+                        : AppColors.defenderTurn,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              AppSpacing.spacerWidthSmall,
 
-              // Game state toggle button
-              GestureDetector(
-                onTap: () {
-                  setState(() => showGameStateOverlay = !showGameStateOverlay);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Color(0xFFFFFF00), width: 2),
-                    borderRadius: BorderRadius.circular(4),
-                    color: Color(0xFFFFFF00).withOpacity(0.05),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0xFFFFFF00).withOpacity(0.4),
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    'STATUS',
-                    style: TextStyle(
-                      color: Color(0xFFFFFF00),
-                      fontSize: 10,
-                      fontFamily: 'Courier New',
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
-                      shadows: [
-                        Shadow(
-                          color: Color(0xFFFFFF00).withOpacity(0.5),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
+              // Timer
+              GlowButton(
+                label: gameState.formattedTime,
+                onTap: () {}, // Timer is not clickable
+                color: AppColors.cyan,
+                fontSize: 12,
+                enabled: false,
+              ),
+              AppSpacing.spacerWidthSmall,
+
+              // Debug buttons
+              if (DEBUG_MODE)
+                GlowButton(
+                  label: 'STATUS',
+                  color: AppColors.yellow,
+                  onTap: () => setState(
+                    () => showGameStateOverlay = !showGameStateOverlay,
                   ),
                 ),
-              ),
+              if (DEBUG_MODE) AppSpacing.spacerWidthSmall,
+              if (DEBUG_MODE)
+                GlowButton(
+                  label: 'DBG',
+                  color: AppColors.magenta,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'DEBUG - H:${gameState.hackerCurrentNode} T:${gameState.tracePositions.join(",")} L:${gameState.lockedNodes.join(",")}',
+                          style: const TextStyle(fontFamily: 'Courier'),
+                        ),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
         );
@@ -243,7 +188,7 @@ class _GameScreenState extends State<GameScreen> {
             _handleNodeTap(details.globalPosition, context);
           },
           child: Container(
-            color: Colors.black,
+            color: AppColors.background,
             child: CustomPaint(
               painter: InteractiveGameMapPainter(
                 hackerNode: gameState.hackerCurrentNode,
@@ -801,29 +746,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildErrorSnackbar(String message) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.red[900],
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.red, width: 1),
-      ),
-      child: Row(
-        children: [
-          const Text('⚠ ', style: TextStyle(color: Colors.red, fontSize: 14)),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 12,
-                fontFamily: 'Courier',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return ErrorSnackbarContent(message: message);
   }
 }
 
@@ -872,8 +795,9 @@ class InteractiveGameMapPainter extends CustomPainter {
       _drawHackerPosition(canvas, size);
     }
 
-    // Draw trace markers
-    _drawTraces(canvas, size);
+    // TODO: Traces are hidden from the map - see STATUS panel for debug info
+    // In production, defender traces will be completely invisible to hacker
+    // _drawTraces(canvas, size);
   }
 
   void _drawGrid(Canvas canvas, Size size) {
@@ -1176,106 +1100,136 @@ class _GameStatePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<GameState>(
       builder: (context, gameState, _) {
-        return Container(
+        return GlowContainer(
+          color: AppColors.neonGreen,
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.green, width: 2),
-          ),
+          borderRadius: BorderRadius.circular(8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'GAME STATE',
-                style: TextStyle(
-                  color: Colors.green,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Courier',
-                ),
+              HeadingText('GAME STATE', color: AppColors.neonGreen),
+              AppSpacing.spacerLarge,
+              StatRow(
+                label: 'Hacker Position:',
+                value: 'Node ${gameState.hackerCurrentNode}',
+                labelColor: AppColors.yellow,
+                valueColor: AppColors.neonGreen,
               ),
-              const SizedBox(height: 16),
-              _StatRow(
-                'Hacker Position:',
-                'Node ${gameState.hackerCurrentNode}',
-              ),
-              _StatRow(
-                'Trace Positions:',
-                gameState.tracePositions.isEmpty
+              StatRow(
+                label: 'Trace Positions:',
+                value: gameState.tracePositions.isEmpty
                     ? 'None'
                     : gameState.tracePositions.join(', '),
+                labelColor: AppColors.yellow,
+                valueColor: AppColors.neonGreen,
               ),
-              _StatRow(
-                'Locked Nodes:',
-                gameState.lockedNodes.isEmpty
+              StatRow(
+                label: 'Locked Nodes:',
+                value: gameState.lockedNodes.isEmpty
                     ? 'None'
                     : gameState.lockedNodes.join(', '),
+                labelColor: AppColors.yellow,
+                valueColor: AppColors.neonGreen,
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'TOOL STATUS:',
-                style: TextStyle(
-                  color: Colors.yellow,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Courier',
-                  letterSpacing: 1,
+              AppSpacing.spacerMedium,
+              LabelText('TOOL STATUS:', color: AppColors.yellow),
+              AppSpacing.spacerSmall,
+              StatRow(
+                label: 'Spoof:',
+                value:
+                    '${gameState.spoofUsesRemaining}/3 ${gameState.spoofActive ? '⚡ ACTIVE' : ''}',
+                labelColor: AppColors.yellow,
+                valueColor: AppColors.neonGreen,
+              ),
+              StatRow(
+                label: 'Tunnel:',
+                value:
+                    '${gameState.tunnelUsesRemaining}/1 ${gameState.toolSelectionMode == ToolSelectionMode.tunnel ? '⚡ SELECTING' : ''}',
+                labelColor: AppColors.yellow,
+                valueColor: AppColors.neonGreen,
+              ),
+              StatRow(
+                label: 'Crack:',
+                value:
+                    '${gameState.crackUsesRemaining}/1 ${gameState.toolSelectionMode == ToolSelectionMode.crack ? '⚡ SELECTING' : ''}',
+                labelColor: AppColors.yellow,
+                valueColor: AppColors.neonGreen,
+              ),
+              AppSpacing.spacerXLarge,
+              // ═══════════════════════════════════════════════════════════════════════════
+              // 🗑️  DEBUG PANEL - DELETE EVERYTHING BELOW THIS WHEN BLE IS IMPLEMENTED
+              // 🗑️  These buttons simulate defender behavior for testing without M5Core2
+              // ═══════════════════════════════════════════════════════════════════════════
+              if (DEBUG_MODE) ...[
+                GlowDivider(color: AppColors.magenta),
+                AppSpacing.spacerMedium,
+                LabelText(
+                  'DEBUG TRACE CONTROLS (TODO: Remove)',
+                  color: AppColors.magenta,
                 ),
-              ),
-              const SizedBox(height: 8),
-              _StatRow(
-                'Spoof:',
-                '${gameState.spoofUsesRemaining}/3 ${gameState.spoofActive ? '⚡ ACTIVE' : ''}',
-              ),
-              _StatRow(
-                'Tunnel:',
-                '${gameState.tunnelUsesRemaining}/1 ${gameState.toolSelectionMode == ToolSelectionMode.tunnel ? '⚡ SELECTING' : ''}',
-              ),
-              _StatRow(
-                'Crack:',
-                '${gameState.crackUsesRemaining}/1 ${gameState.toolSelectionMode == ToolSelectionMode.crack ? '⚡ SELECTING' : ''}',
-              ),
+                AppSpacing.spacerMedium,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.magenta,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      onPressed: () {
+                        gameState.advanceDebugTraces();
+                      },
+                      child: const Text(
+                        'Advance Traces',
+                        style: TextStyle(fontSize: 10, color: Colors.black),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.neonRed,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      onPressed: () {
+                        gameState.debugCheckIfCaught();
+                      },
+                      child: const Text(
+                        'Check Caught?',
+                        style: TextStyle(fontSize: 10, color: Colors.white),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.orange,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      onPressed: () {
+                        gameState.debugSwitchTurn();
+                      },
+                      child: const Text(
+                        'Switch Turn',
+                        style: TextStyle(fontSize: 10, color: Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              // ═══════════════════════════════════════════════════════════════════════════
+              // 🗑️  END DEBUG PANEL - DELETE EVERYTHING ABOVE
+              // ═══════════════════════════════════════════════════════════════════════════
             ],
           ),
         );
       },
-    );
-  }
-}
-
-class _StatRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.yellow,
-              fontSize: 12,
-              fontFamily: 'Courier',
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.green,
-              fontSize: 12,
-              fontFamily: 'Courier',
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

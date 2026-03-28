@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../main.dart' show DEBUG_MODE;
 import '../models/game_state.dart';
+import '../constants.dart';
+import '../widgets.dart';
 
 class GameOverScreen extends StatelessWidget {
   const GameOverScreen({super.key});
@@ -8,11 +11,12 @@ class GameOverScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       body: Center(
         child: Consumer<GameState>(
           builder: (context, gameState, _) {
-            bool hackerWon = gameState.gameWinner == 'hacker';
+            final gameWinner = gameState.gameWinner;
+            bool hackerWon = gameWinner == 'hacker';
 
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -21,15 +25,25 @@ class GameOverScreen extends StatelessWidget {
                 Text(
                   hackerWon ? 'ACCESS GRANTED ✓' : 'CONNECTION TERMINATED ✗',
                   style: TextStyle(
-                    color: hackerWon ? Colors.green : Colors.red,
+                    color: hackerWon ? AppColors.neonGreen : AppColors.neonRed,
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Courier',
                     letterSpacing: 2,
+                    shadows: [
+                      Shadow(
+                        color:
+                            (hackerWon
+                                    ? AppColors.neonGreen
+                                    : AppColors.neonRed)
+                                .withOpacity(0.6),
+                        blurRadius: 12,
+                      ),
+                    ],
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 32),
+                AppSpacing.spacerXLarge,
 
                 // Winner message
                 Text(
@@ -37,120 +51,80 @@ class GameOverScreen extends StatelessWidget {
                       ? 'You successfully breached the system!'
                       : 'You were traced and caught!',
                   style: TextStyle(
-                    color: hackerWon ? Colors.green : Colors.red,
+                    color: hackerWon ? AppColors.neonGreen : AppColors.neonRed,
                     fontSize: 16,
                     fontFamily: 'Courier',
+                    shadows: [
+                      Shadow(
+                        color:
+                            (hackerWon
+                                    ? AppColors.neonGreen
+                                    : AppColors.neonRed)
+                                .withOpacity(0.5),
+                        blurRadius: 8,
+                      ),
+                    ],
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 48),
+                AppSpacing.spacerXLarge,
+                AppSpacing.spacerLarge,
 
                 // Stats panel
-                Container(
+                GlowContainer(
+                  color: hackerWon ? AppColors.neonGreen : AppColors.neonRed,
                   padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: hackerWon ? Colors.green : Colors.red,
-                      width: 2,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  borderRadius: BorderRadius.circular(8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      HeadingText(
                         'FINAL STATS',
-                        style: TextStyle(
-                          color: Colors.cyan,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Courier',
-                        ),
+                        color: AppColors.cyan,
+                        fontSize: 14,
                       ),
-                      const SizedBox(height: 16),
-                      _StatLine(
-                        'Time Survived:',
-                        '${300 - gameState.timeRemaining}s',
+                      AppSpacing.spacerLarge,
+                      StatRow(
+                        label: 'Time Survived:',
+                        value: '${300 - gameState.timeRemaining}s',
+                        labelColor: AppColors.cyan,
+                        valueColor: AppColors.neonGreen,
                       ),
-                      _StatLine(
-                        'Tools Used:',
-                        '${(1 - gameState.spoofUsesRemaining) + (1 - gameState.tunnelUsesRemaining) + (1 - gameState.crackUsesRemaining)}',
+                      StatRow(
+                        label: 'Tools Used:',
+                        value:
+                            '${(1 - gameState.spoofUsesRemaining) + (1 - gameState.tunnelUsesRemaining) + (1 - gameState.crackUsesRemaining)}',
+                        labelColor: AppColors.cyan,
+                        valueColor: AppColors.neonGreen,
                       ),
-                      _StatLine(
-                        'Final Position:',
-                        'Node ${gameState.hackerCurrentNode}',
+                      StatRow(
+                        label: 'Final Position:',
+                        value: 'Node ${gameState.hackerCurrentNode}',
+                        labelColor: AppColors.cyan,
+                        valueColor: AppColors.neonGreen,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 48),
+                AppSpacing.spacerXLarge,
+                AppSpacing.spacerLarge,
 
                 // Restart button
-                GestureDetector(
+                GlowButton(
+                  label: 'RESTART GAME',
+                  color: AppColors.neonGreen,
                   onTap: () {
                     context.read<GameState>().resetGame();
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green, width: 2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'RESTART GAME',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Courier',
-                        letterSpacing: 2,
-                      ),
-                    ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
                   ),
                 ),
               ],
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _StatLine extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatLine(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.cyan,
-              fontSize: 12,
-              fontFamily: 'Courier',
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.green,
-              fontSize: 12,
-              fontFamily: 'Courier',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }
