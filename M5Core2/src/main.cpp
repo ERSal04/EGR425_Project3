@@ -172,6 +172,7 @@ class ServerCallbacks : public BLEServerCallbacks {
     (void)pServer;
     deviceConnected = true;
     currentStatus = HACKER_SELECT;
+    Serial.println("[SERVER] Client connected!");
   }
 
   void onDisconnect(BLEServer *pServer) override {
@@ -202,11 +203,21 @@ class HackerWriteCallbacks : public BLECharacteristicCallbacks {
 
     // Update game state
     hackerPosition = nodeId;
+    Serial.printf("[SERVER] Hacker moved to node: %d\n", hackerPosition);
+    Serial.printf("[SERVER] Full payload received: %s\n", value.c_str());
 
     // Check if Hacker made it to Core node
     if(nodes[hackerPosition].type == CORE ) {
       result = HACKER_WIN;
       currentStatus = GAME_OVER;
+      Serial.println("[SERVER] Hacker reached CORE — Hacker wins!");
+    }
+
+    // Check if Hacker moved onto a trace
+    if(tracePositions[0] == hackerPosition || tracePositions[1] == hackerPosition) {
+        result = DEFENDER_WIN;
+        currentStatus = GAME_OVER;
+        Serial.println("[SERVER] DEFENDER WIN - hacker walked into trace");
     }
 
     // Chnage to Defender's turn
@@ -319,6 +330,11 @@ void drawScreen() {
     // }
 
   } else if(currentStatus == HACKER_SELECT) {
+    Serial.print("[SERVER] Waiting for Hacker to select an Entry node");
+
+    sprite.setTextColor(TFT_GREEN, TFT_BLACK);
+    sprite.setTextSize(2);
+    sprite.setCursor(20, 100);  // add this
     sprite.print("Waiting for Hacker...");
   } else {
 
@@ -589,6 +605,7 @@ void handleHackerSelect() {
   // }
 
   if(hackerPosition != -1) {
+    Serial.printf("[SERVER] Hacker selected entry node: %d\n", hackerPosition);
     initializeTraces();
     nodes[hackerPosition].occupant = HACKER;
     currentStatus = GAME_IN_PROGRESS;
