@@ -11,7 +11,7 @@ import 'screens/game_over_screen.dart';
 // DEBUG MODE - Toggle this to enable/disable all debug features
 // Set to false for production - true for development with debug traces/locks
 // ============================================================================
-const bool DEBUG_MODE = false;
+const bool DEBUG_MODE = true;
 
 void main() {
   runApp(

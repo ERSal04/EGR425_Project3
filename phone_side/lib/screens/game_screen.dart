@@ -256,13 +256,6 @@ class _GameScreenState extends State<GameScreen> {
           decoration: BoxDecoration(
             color: Colors.black,
             border: Border(top: BorderSide(color: Color(0xFF00FFFF), width: 2)),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0xFF00FFFF).withOpacity(0.4),
-                blurRadius: 12,
-                offset: const Offset(0, -4),
-              ),
-            ],
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -274,13 +267,6 @@ class _GameScreenState extends State<GameScreen> {
                     border: Border.all(color: Color(0xFF00FFFF), width: 2),
                     borderRadius: BorderRadius.circular(6),
                     color: Color(0xFF00FFFF).withOpacity(0.08),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0xFF00FFFF).withOpacity(0.4),
-                        blurRadius: 12,
-                        spreadRadius: 1,
-                      ),
-                    ],
                   ),
                   child: Row(
                     children: [
@@ -290,12 +276,6 @@ class _GameScreenState extends State<GameScreen> {
                         decoration: BoxDecoration(
                           color: Color(0xFF00FFFF),
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0xFF00FFFF).withOpacity(0.8),
-                              blurRadius: 10,
-                            ),
-                          ],
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -310,12 +290,6 @@ class _GameScreenState extends State<GameScreen> {
                             fontFamily: 'Courier New',
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.2,
-                            shadows: [
-                              Shadow(
-                                color: Color(0xFF00FFFF).withOpacity(0.6),
-                                blurRadius: 10,
-                              ),
-                            ],
                           ),
                         ),
                       ),
@@ -343,17 +317,6 @@ class _GameScreenState extends State<GameScreen> {
                           fontFamily: 'Courier New',
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.8,
-                          shadows: [
-                            Shadow(
-                              color:
-                                  (gameState.toolSelectionMode ==
-                                              ToolSelectionMode.tunnel
-                                          ? Color(0xFF00FFFF)
-                                          : Color(0xFFFF0055))
-                                      .withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -386,12 +349,6 @@ class _GameScreenState extends State<GameScreen> {
                                 border: Border.all(color: bgColor, width: 2),
                                 borderRadius: BorderRadius.circular(4),
                                 color: bgColor.withOpacity(0.12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: bgColor.withOpacity(0.5),
-                                    blurRadius: 10,
-                                  ),
-                                ],
                               ),
                               child: Text(
                                 nodeName,
@@ -401,12 +358,6 @@ class _GameScreenState extends State<GameScreen> {
                                   fontFamily: 'Courier New',
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 0.5,
-                                  shadows: [
-                                    Shadow(
-                                      color: bgColor.withOpacity(0.5),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
                                 ),
                               ),
                             ),
@@ -433,12 +384,6 @@ class _GameScreenState extends State<GameScreen> {
                           fontFamily: 'Courier New',
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.8,
-                          shadows: [
-                            Shadow(
-                              color: Color(0xFF00FF41).withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -463,12 +408,6 @@ class _GameScreenState extends State<GameScreen> {
                                 ),
                                 borderRadius: BorderRadius.circular(4),
                                 color: Color(0xFF00FF41).withOpacity(0.12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Color(0xFF00FF41).withOpacity(0.5),
-                                    blurRadius: 10,
-                                  ),
-                                ],
                               ),
                               child: Text(
                                 nodeName,
@@ -478,12 +417,6 @@ class _GameScreenState extends State<GameScreen> {
                                   fontFamily: 'Courier New',
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 0.5,
-                                  shadows: [
-                                    Shadow(
-                                      color: Color(0xFF00FF41).withOpacity(0.5),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
                                 ),
                               ),
                             ),
@@ -516,12 +449,6 @@ class _GameScreenState extends State<GameScreen> {
                                 fontFamily: 'Courier New',
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.8,
-                                shadows: [
-                                  Shadow(
-                                    color: Color(0xFFFF0055).withOpacity(0.5),
-                                    blurRadius: 8,
-                                  ),
-                                ],
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -543,14 +470,6 @@ class _GameScreenState extends State<GameScreen> {
                                     ),
                                     borderRadius: BorderRadius.circular(4),
                                     color: Color(0xFFFF0055).withOpacity(0.12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Color(
-                                          0xFFFF0055,
-                                        ).withOpacity(0.5),
-                                        blurRadius: 10,
-                                      ),
-                                    ],
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -567,14 +486,6 @@ class _GameScreenState extends State<GameScreen> {
                                           fontFamily: 'Courier New',
                                           fontWeight: FontWeight.bold,
                                           letterSpacing: 0.5,
-                                          shadows: [
-                                            Shadow(
-                                              color: Color(
-                                                0xFFFF0055,
-                                              ).withOpacity(0.5),
-                                              blurRadius: 6,
-                                            ),
-                                          ],
                                         ),
                                       ),
                                     ],
@@ -597,13 +508,6 @@ class _GameScreenState extends State<GameScreen> {
                     border: Border.all(color: Color(0xFFFF00FF), width: 2),
                     borderRadius: BorderRadius.circular(6),
                     color: Color(0xFFFF00FF).withOpacity(0.08),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0xFFFF00FF).withOpacity(0.3),
-                        blurRadius: 12,
-                        spreadRadius: 1,
-                      ),
-                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,12 +520,6 @@ class _GameScreenState extends State<GameScreen> {
                           fontFamily: 'Courier New',
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.5,
-                          shadows: [
-                            Shadow(
-                              color: Color(0xFFFF00FF).withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -694,9 +592,6 @@ class _GameScreenState extends State<GameScreen> {
           ),
           borderRadius: BorderRadius.circular(6),
           color: isAvailable ? color.withOpacity(0.12) : Colors.grey[900],
-          boxShadow: isAvailable
-              ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 10)]
-              : [],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -709,9 +604,6 @@ class _GameScreenState extends State<GameScreen> {
                 fontSize: 11,
                 fontFamily: 'Courier New',
                 letterSpacing: 0.8,
-                shadows: isAvailable
-                    ? [Shadow(color: color.withOpacity(0.6), blurRadius: 6)]
-                    : [],
               ),
             ),
             const SizedBox(height: 4),

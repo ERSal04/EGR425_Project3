@@ -78,7 +78,7 @@ class AppSpacing {
 
 // ============ TEXT STYLE CONSTANTS ============
 class AppTextStyles {
-  // Base text style with Courier New font and glow effect
+  // Base text style with Courier New font (no glow)
   static TextStyle _baseCourierStyle(
     Color color, {
     double fontSize = 12,
@@ -91,7 +91,6 @@ class AppTextStyles {
       fontFamily: 'Courier New',
       fontWeight: fontWeight,
       letterSpacing: letterSpacing,
-      shadows: [Shadow(color: color.withOpacity(0.6), blurRadius: 6)],
     );
   }
 
@@ -163,7 +162,6 @@ class AppTextStyles {
     fontFamily: 'Courier New',
     fontWeight: FontWeight.bold,
     letterSpacing: 0.5,
-    shadows: [Shadow(color: AppColors.neonRed.withOpacity(0.6), blurRadius: 6)],
   );
 
   // Success message text
@@ -173,9 +171,6 @@ class AppTextStyles {
     fontFamily: 'Courier New',
     fontWeight: FontWeight.bold,
     letterSpacing: 0.5,
-    shadows: [
-      Shadow(color: AppColors.neonGreen.withOpacity(0.6), blurRadius: 6),
-    ],
   );
 }
 
@@ -185,24 +180,15 @@ class AppDecorations {
   static BoxBorder standardBorder(Color color, {double width = 2}) =>
       Border.all(color: color, width: width);
 
-  // Glow container decoration factory
+  // Container decoration factory (clean borders, no glow)
   static BoxDecoration glowContainer({
     required Color color,
     double borderRadius = 4,
-    double blurRadius = 8,
-    double? shadowSpread = 1,
   }) {
     return BoxDecoration(
       border: Border.all(color: color, width: 2),
       borderRadius: BorderRadius.circular(borderRadius),
       color: color.withOpacity(0.05),
-      boxShadow: [
-        BoxShadow(
-          color: color.withOpacity(0.5),
-          blurRadius: blurRadius,
-          spreadRadius: shadowSpread ?? 1,
-        ),
-      ],
     );
   }
 
@@ -210,13 +196,6 @@ class AppDecorations {
   static BoxDecoration topBarDecoration = BoxDecoration(
     color: AppColors.background,
     border: Border(bottom: BorderSide(color: AppColors.cyan, width: 2)),
-    boxShadow: [
-      BoxShadow(
-        color: AppColors.cyan.withOpacity(0.6),
-        blurRadius: 12,
-        spreadRadius: 1,
-      ),
-    ],
   );
 
   // Panel background decoration
@@ -224,13 +203,6 @@ class AppDecorations {
     color: AppColors.background,
     border: Border.all(color: AppColors.cyan, width: 2),
     borderRadius: BorderRadius.circular(8),
-    boxShadow: [
-      BoxShadow(
-        color: AppColors.cyan.withOpacity(0.4),
-        blurRadius: 12,
-        spreadRadius: 1,
-      ),
-    ],
   );
 }
 

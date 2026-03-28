@@ -116,12 +116,6 @@ class _EntryNodeButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.neonGreen,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.neonGreen.withOpacity(0.6),
-                    blurRadius: 8,
-                  ),
-                ],
               ),
             ),
             AppSpacing.spacerMedium,

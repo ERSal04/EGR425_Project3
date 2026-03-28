@@ -37,7 +37,6 @@ class GlowButton extends StatelessWidget {
             fontFamily: 'Courier New',
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
-            shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 4)],
           ),
         ),
       ),
@@ -190,9 +189,6 @@ class StatPanel extends StatelessWidget {
                 fontFamily: 'Courier New',
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1,
-                shadows: [
-                  Shadow(color: titleColor.withOpacity(0.6), blurRadius: 6),
-                ],
               ),
             ),
           ),
@@ -222,11 +218,7 @@ class ConnectionIndicator extends StatelessWidget {
     return Container(
       width: AppSizes.indicatorSize,
       height: AppSizes.indicatorSize,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color.withOpacity(0.8), blurRadius: 8)],
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
@@ -314,7 +306,6 @@ class HeadingText extends StatelessWidget {
         fontFamily: 'Courier New',
         fontWeight: FontWeight.bold,
         letterSpacing: 1,
-        shadows: [Shadow(color: color.withOpacity(0.6), blurRadius: 6)],
       ),
     );
   }
@@ -340,9 +331,6 @@ class ErrorSnackbarContent extends StatelessWidget {
         color: AppColors.neonRed.withOpacity(0.1),
         border: Border.all(color: AppColors.neonRed, width: 2),
         borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(color: AppColors.neonRed.withOpacity(0.4), blurRadius: 8),
-        ],
       ),
       padding: AppSpacing.paddingMedium,
       child: Text(message, style: AppTextStyles.errorText),
@@ -364,9 +352,6 @@ class SuccessSnackbarContent extends StatelessWidget {
         color: AppColors.neonGreen.withOpacity(0.1),
         border: Border.all(color: AppColors.neonGreen, width: 2),
         borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(color: AppColors.neonGreen.withOpacity(0.4), blurRadius: 8),
-        ],
       ),
       padding: AppSpacing.paddingMedium,
       child: Text(message, style: AppTextStyles.successText),
@@ -399,7 +384,6 @@ class GlowContainer extends StatelessWidget {
         border: Border.all(color: color, width: 2),
         borderRadius: borderRadius ?? BorderRadius.circular(4),
         color: color.withOpacity(0.05),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)],
       ),
       child: child,
     );
@@ -427,7 +411,6 @@ class GlowDivider extends StatelessWidget {
         border: Border(
           bottom: BorderSide(color: color, width: thickness),
         ),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 4)],
       ),
     );
   }

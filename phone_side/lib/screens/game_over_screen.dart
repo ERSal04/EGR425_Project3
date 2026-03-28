@@ -30,16 +30,6 @@ class GameOverScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Courier',
                     letterSpacing: 2,
-                    shadows: [
-                      Shadow(
-                        color:
-                            (hackerWon
-                                    ? AppColors.neonGreen
-                                    : AppColors.neonRed)
-                                .withOpacity(0.6),
-                        blurRadius: 12,
-                      ),
-                    ],
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -54,16 +44,6 @@ class GameOverScreen extends StatelessWidget {
                     color: hackerWon ? AppColors.neonGreen : AppColors.neonRed,
                     fontSize: 16,
                     fontFamily: 'Courier',
-                    shadows: [
-                      Shadow(
-                        color:
-                            (hackerWon
-                                    ? AppColors.neonGreen
-                                    : AppColors.neonRed)
-                                .withOpacity(0.5),
-                        blurRadius: 8,
-                      ),
-                    ],
                   ),
                   textAlign: TextAlign.center,
                 ),
