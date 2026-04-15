@@ -94,11 +94,35 @@ int selectedTrace = 0; // which trace (0 or 1) is being moved
 int connectionIndex = -1; // Index that helps cycle through neighboring nodes
 int activeTraces = 0; // Count of how many active traces
 int selectedNode = -1; // Selected Node to make an action on
+int nodeLockUsage = 3; // Count of how many nodes can be locked
+bool gameOverNotified = false; // Notifies client that game is over
+
+// Tool select state
+enum DefenderTool { TOOL_NODELOCK, TOOL_SPEEDBOOST, TOOL_PINGSCAN };
+DefenderTool activeTool = TOOL_NODELOCK;
+int toolIndex = 0; // cycles through available tools
+bool toolConfirmed = false;
+
+// Ping scan state
+bool pingScanActive = false;
+bool pingScanCooldown = false;
+int pingScanRevealTurns = 0;
+int pingScanUsage = 3; // Number of ping scans left
+
+// Speed boost state  
+bool speedBoostActive = false;
 int speedBoostUsage = 2; // Count of how many speed boosts left
 int speedBoostDuration = 0; // Count of how long the speed boost is active for
-int nodeLockUsage = 3; // Count of how many nodes can be locked
-int pingScanUsage = 3; // Number of ping scans left
-bool gameOverNotified = false; // Notifies client that game is over
+
+
+//////////////////////////////////////////////////////
+// Test Variable Declarations
+//////////////////////////////////////////////////////
+bool testMode = true; // set to false for real game
+int testPath[] = {0, 4, 7, 9, 13, 15, 23}; // path to CORE
+int testPathIndex = 0;
+unsigned long lastTestMoveMs = 0;
+unsigned long testMoveInterval = 3000; // move every 3 seconds
 
 enum gameStatus { WAITING_TO_CONNECT, HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER };
 // Should be WAITING_TO_CONNECT so screen will show a "lobby" waiting for player
@@ -367,6 +391,24 @@ void drawScreen() {
         // Draw the Node
         sprite.fillCircle(screenX, screenY, nodeRadius, nodeColor);
 
+        if (currentNode.isLocked) {
+          // Draw orange lock above the node
+          sprite.fillRect(screenX - 4, screenY - nodeRadius - 8, 8, 6, TFT_ORANGE);
+          sprite.drawLine(screenX - 2, screenY - nodeRadius - 8, 
+                          screenX - 2, screenY - nodeRadius - 11, TFT_ORANGE);
+          sprite.drawLine(screenX + 2, screenY - nodeRadius - 8, 
+                          screenX + 2, screenY - nodeRadius - 11, TFT_ORANGE);
+          sprite.drawLine(screenX - 2, screenY - nodeRadius - 11, 
+                          screenX + 2, screenY - nodeRadius - 11, TFT_ORANGE);
+          // Orange outline on the node itself
+          sprite.drawCircle(screenX, screenY, nodeRadius + 2, TFT_ORANGE);
+        }
+
+        // Indicate the hacker's location in testMode
+        if (i == hackerPosition && testMode) {
+          sprite.fillCircle(screenX, screenY, nodeRadius - 2, TFT_PINK);
+        }
+
         // Indicate if the node contains a trace
         if(currentNode.traceCount > 0) {
           sprite.fillCircle(screenX, screenY, nodeRadius - 2, TFT_PURPLE);
@@ -382,22 +424,68 @@ void drawScreen() {
 
         if(defenderState == NODE_SELECT) {
           sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
-          sprite.setTextColor(TFT_WHITE);
+          sprite.setTextColor(nodes[selectedNode].isLocked ? TFT_ORANGE : TFT_WHITE);
           sprite.setCursor(5, 218);
-          sprite.printf("T%d < Node %d > B:Move | Y:Switch Trace", 
-              selectedTrace, selectedNode);
+          if (nodes[selectedNode].isLocked) {
+              sprite.printf("T%d < Node %d > LOCKED!", selectedTrace, selectedNode);
+          } else {
+              sprite.printf("T%d < Node %d > B:Move | Y:Switch", selectedTrace, selectedNode);
+          }
         }
 
-        if(defenderState == TOOL_SELECT) {
-          sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
-          sprite.setTextColor(TFT_RED);
-          sprite.setCursor(80, 218);
-          sprite.printf("TOOL_SELECT IS NOT AVAILABLE");
+        if (defenderState == TOOL_SELECT && currentStatus == GAME_IN_PROGRESS) {
+          sprite.fillRect(0, 195, 320, 45, TFT_BLACK);
+          sprite.drawRect(0, 195, 320, 45, TFT_CYAN);
+
+          const char* toolNames[] = {"NODE LOCK", "SPEED BOOST", "PING SCAN"};
+          int toolUsages[] = {nodeLockUsage, speedBoostUsage, pingScanUsage};
+
+          sprite.setTextSize(1);
+
+          if (toolConfirmed) {
+            // Node lock target selection mode
+            sprite.setTextColor(TFT_RED);
+            sprite.setCursor(40, 200);
+            sprite.printf("LOCKING NODE %d", selectedNode);
+            sprite.setTextColor(TFT_WHITE);
+            sprite.setCursor(40, 212);
+            sprite.print("< > cycle  B: Lock  SELECT: Cancel");
+          } else {
+            // Normal tool cycling
+            sprite.setTextColor(TFT_CYAN);
+            sprite.setCursor(4, 205);
+            sprite.print("<");
+            sprite.setCursor(312, 205);
+            sprite.print(">");
+            sprite.setTextColor(TFT_YELLOW);
+            sprite.setCursor(60, 200);
+            sprite.printf("[ %s ]", toolNames[toolIndex]);
+            sprite.setTextColor(TFT_WHITE);
+            sprite.setCursor(60, 212);
+            sprite.printf("Uses left: %d", toolUsages[toolIndex]);
+            sprite.setTextColor(TFT_GREEN);
+            sprite.setCursor(60, 224);
+            sprite.print("START: Use  SELECT: Back");
+          }
         }
       }
     }
-  }
 
+    if (pingScanActive && hackerPosition >= 0) {
+      Node hackerNode = nodes[hackerPosition];
+      int hScreenX = (int)(hackerNode.worldX - cameraX);
+      int hScreenY = (int)(hackerNode.worldY - cameraY);
+      
+      if (hScreenX >= -20 && hScreenX <= 340 && hScreenY >= -20 && hScreenY <= 260) {
+          float pulse = sin(millis() / 150.0f);
+          int pulseRadius = 16 + (int)(pulse * 6); // much larger: 10 to 22
+          
+          sprite.drawCircle(hScreenX, hScreenY, pulseRadius, TFT_RED);
+          sprite.drawCircle(hScreenX, hScreenY, pulseRadius + 3, TFT_RED);
+          sprite.drawCircle(hScreenX, hScreenY, pulseRadius + 6, 0x7800);
+      }
+    }
+  }
   // Push constructed frame
   sprite.pushSprite(0, 0);
 }
@@ -555,6 +643,7 @@ void restartAdvertising() {
 }
 
 void sendDefenderState() {
+  Serial.printf("[SERVER] sendDefenderState called — connected:%d\n", deviceConnected);
   if(!deviceConnected || defenderChar == nullptr) return;
 
   // Build trace positions string
@@ -570,6 +659,7 @@ void sendDefenderState() {
     }
   }
   payload += "|L" + String(lockedNode);
+  payload += pingScanActive ? "|P1" : "|P0";
 
   // Add game status
   if(currentStatus == GAME_OVER) {
@@ -592,17 +682,20 @@ void sendDefenderState() {
 // Functions that handle the different states of the game
 //////////////////////////////////////////////////////
 void handleWaitingToConnect() {
-  // TODO: implement logic
+  if (testMode) {
+      currentStatus = HACKER_SELECT;
+  }
 }
 
 void handleHackerSelect() {
-  // Initializes the hacker to a selected node
-  // if (hackerPosition == -1) {
-  //     hackerPosition = 0;
-  //     initializeTraces();
-  //     nodes[hackerPosition].occupant = HACKER;
-  //     currentStatus = GAME_IN_PROGRESS;
-  // }
+  if (testMode && hackerPosition == -1) {
+        hackerPosition = testPath[0];
+        testPathIndex = 1;
+        initializeTraces();
+        nodes[hackerPosition].occupant = HACKER;
+        currentStatus = GAME_IN_PROGRESS;
+        return;
+    }
 
   if(hackerPosition != -1) {
     Serial.printf("[SERVER] Hacker selected entry node: %d\n", hackerPosition);
@@ -638,7 +731,46 @@ void handleGameOver() {
 //////////////////////////////////////////////////////
 
 void handleHackerTurn() {
+  if (!testMode) return; // real game waits for BLE
 
+    unsigned long now = millis();
+    if (now - lastTestMoveMs < testMoveInterval) return;
+    lastTestMoveMs = now;
+
+    if (testPathIndex < 7) {
+        // Move hacker to next node in test path
+        int oldPos = hackerPosition;
+        hackerPosition = testPath[testPathIndex];
+        testPathIndex++;
+
+        // Update node occupants
+        if (oldPos >= 0) nodes[oldPos].occupant = NONE;
+        nodes[hackerPosition].occupant = HACKER;
+
+        Serial.printf("[TEST] Hacker auto-moved to node: %d\n", hackerPosition);
+
+        // Check win conditions
+        if (nodes[hackerPosition].type == CORE) {
+            result = HACKER_WIN;
+            currentStatus = GAME_OVER;
+        }
+        if (tracePositions[0] == hackerPosition || 
+            tracePositions[1] == hackerPosition) {
+            result = DEFENDER_WIN;
+            currentStatus = GAME_OVER;
+        }
+
+        // Switch to defender turn
+        currentTurn = DEFENDER_TURN;
+
+        if (pingScanActive) {
+            pingScanRevealTurns--;
+            if (pingScanRevealTurns <= 0) {
+                pingScanActive = false;
+                pingScanCooldown = false;
+            }
+        }
+    }
 }
 
 void handleDefenderTurn() {
@@ -759,28 +891,83 @@ void handleDefenderTurn() {
   ////////////////////////////////////////////////////////////////
   } else if (defenderState == TOOL_SELECT) {
 
-    // TOOL SELECT FEATURES HERE
+    if (!toolConfirmed) {
+        // Cycle through tools
+        if (rightJustPushed) {
+            toolIndex = (toolIndex + 1) % 3;
+            activeTool = (DefenderTool)toolIndex;
+        }
+        if (leftJustPushed) {
+            toolIndex = (toolIndex + 2) % 3;
+            activeTool = (DefenderTool)toolIndex;
+        }
 
-    ////////////////////////////////////////////////////////////////
-    // GOES TO NODE SELECT MODE
-    ////////////////////////////////////////////////////////////////
-    if (startJustPressed) {
-      defenderState = NODE_SELECT;
-    } 
+        // Activate tool with START
+        if (startJustPressed) {
+            if (activeTool == TOOL_NODELOCK && nodeLockUsage > 0) {
+                toolConfirmed = true;
+                connectionIndex = 0;
+                selectedNode = 0; // start at node 0
+            } else if (activeTool == TOOL_SPEEDBOOST && speedBoostUsage > 0) {
+                speedBoostActive = true;
+                speedBoostUsage--;
+                sendDefenderState();
+                currentTurn = HACKER_TURN;
+                defenderState = MAP_VIEW;
+            } else if (activeTool == TOOL_PINGSCAN && pingScanUsage > 0 && !pingScanCooldown) {
+                pingScanActive = true;
+                // Pan camera to hacker location
+                cameraX = nodes[hackerPosition].worldX - 160;
+                cameraY = nodes[hackerPosition].worldY - 120;
+                pingScanUsage--;
+                pingScanCooldown = true;
+                pingScanRevealTurns = 1;
+                sendDefenderState();
+                currentTurn = HACKER_TURN;
+                defenderState = MAP_VIEW;
+            }
+        }
+    } else {
+        // toolConfirmed == true means Node Lock is active
+        // Cycle through ALL 24 nodes
+        if (rightJustPushed) {
+            connectionIndex = (connectionIndex + 1) % 24;
+            selectedNode = connectionIndex;
+            // Pan camera to selected node
+            cameraX = nodes[selectedNode].worldX - 160;
+            cameraY = nodes[selectedNode].worldY - 120;
+        }
+        if (leftJustPushed) {
+            connectionIndex = (connectionIndex + 23) % 24;
+            selectedNode = connectionIndex;
+            cameraX = nodes[selectedNode].worldX - 160;
+            cameraY = nodes[selectedNode].worldY - 120;
+        }
 
-    ////////////////////////////////////////////////////////////////
-    // RETURNS TO MAP VIEW FROM TOOL SELECT
-    ////////////////////////////////////////////////////////////////
-    if (selectJustPressed) {
-      defenderState = MAP_VIEW;
+        // B confirms the lock
+        if (bJustPressed) {
+            if (!nodes[selectedNode].isLocked) {
+                nodes[selectedNode].isLocked = true;
+                nodeLockUsage--;
+                toolConfirmed = false;
+                sendDefenderState();
+                currentTurn = HACKER_TURN;
+                defenderState = MAP_VIEW;
+            }
+        }
+
+        // Cancel with SELECT
+        if (selectJustPressed) {
+            toolConfirmed = false;
+        }
     }
 
-  ////////////////////////////////////////////////////////////////
-  // NODE SELECT MODE
-  //////////////////////////////////////////////////////////////// 
+    // Back to MAP_VIEW with SELECT (only when not in node selection)
+    if (selectJustPressed && !toolConfirmed) {
+        defenderState = MAP_VIEW;
+    }
   } else {
 
-    // NEED TO DRAW AN INDICATOR WHERE THE TRACE NODES AREEEE
     // NEED TO BE ABLE TO VIEW THE SELECTED TRACES POSITION INSTEAD OF JUST THE NEIGHTBORING NODES
 
     // Sets the camera position to the selectedTrace's position 
@@ -845,9 +1032,18 @@ void handleDefenderTurn() {
       if (connectionIndex == -1) {
         // Can not confirm no neighbor selected yet
 
+      } else if (toolConfirmed && activeTool == TOOL_NODELOCK) {
+          // Lock the selected node
+          if (!nodes[selectedNode].isLocked && nodeLockUsage > 0) {
+              nodes[selectedNode].isLocked = true;
+              nodeLockUsage--;
+              toolConfirmed = false;
+              sendDefenderState();
+              currentTurn = HACKER_TURN;
+              defenderState = MAP_VIEW;
+          }
       } else if (nodes[selectedNode].isLocked) {
         // Check to see if desired destination node is locked before allowing move
-        
         // Display warning text that says "Cannot move. Node is locked"
 
       } else {
@@ -915,6 +1111,14 @@ void resetGame() {
     currentStatus = HACKER_SELECT;
     gameOverNotified = false;
     result = NONE_RESULT;
+
+    activeTool = TOOL_NODELOCK;
+    toolIndex = 0;
+    toolConfirmed = false;
+    pingScanActive = false;
+    pingScanCooldown = false;
+    pingScanRevealTurns = 0;
+    speedBoostActive = false;
 
     // Reset all node occupants and locks
     for (int i = 0; i < 24; i++) {
