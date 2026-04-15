@@ -12,7 +12,7 @@ enum GamePhase {
 enum CurrentTurn { hackerTurn, defenderTurn }
 
 // Enum for tool selection mode
-enum ToolSelectionMode { none, tunnel, crack }
+enum ToolSelectionMode { none, tunnel, crack, spoof }
 
 /// GameState manages all hacker-side game data
 /// This is a ChangeNotifier so UI widgets can listen for updates
@@ -23,6 +23,7 @@ class GameState extends ChangeNotifier {
 
   // ========== Hacker Position & Map ==========
   int _hackerCurrentNode = -1; // -1 = not placed yet
+  int _defenderCurrentNode = -1; // -1 = not placed yet
   List<int> _availableNodes = []; // Nodes hacker can move to
   List<int> _tracePositions = []; // Where defender's traces are
   List<int> _lockedNodes = []; // Locked nodes (grey out)
@@ -34,24 +35,25 @@ class GameState extends ChangeNotifier {
 
   // ========== Tool Effects ==========
   bool _spoofActive = false; // Traces misdirected
+  int _spoofFakeNode = -1; // The fake node spoof sends to defender
   ToolSelectionMode _toolSelectionMode = ToolSelectionMode.none;
   List<int> _validToolTargets = []; // Valid nodes to select for current tool
 
   // ========== Game Status ==========
-  int _timeRemaining = 300; // Seconds
   bool _isM5Connected = false;
   String? _errorMessage;
   String? _gameWinner; // "hacker", "defender", or null
   String _connectedDeviceName = "M5Core2";
 
   // ========== BLE Callbacks ==========
-  Function(int nodeId, {String tool})?
+  Function(int nodeId, {String tool, int? targetNode})?
   onMoveSend; // Callback to send moves to M5
 
   // ========== Getters ==========
   GamePhase get gamePhase => _gamePhase;
   CurrentTurn get currentTurn => _currentTurn;
   int get hackerCurrentNode => _hackerCurrentNode;
+  int get defenderCurrentNode => _defenderCurrentNode;
   List<int> get availableNodes => _availableNodes;
   List<int> get tracePositions => _tracePositions;
   List<int> get lockedNodes => _lockedNodes;
@@ -59,9 +61,9 @@ class GameState extends ChangeNotifier {
   int get tunnelUsesRemaining => _tunnelUsesRemaining;
   int get crackUsesRemaining => _crackUsesRemaining;
   bool get spoofActive => _spoofActive;
+  int get spoofFakeNode => _spoofFakeNode;
   ToolSelectionMode get toolSelectionMode => _toolSelectionMode;
   List<int> get validToolTargets => _validToolTargets;
-  int get timeRemaining => _timeRemaining;
   bool get isM5Connected => _isM5Connected;
   String? get errorMessage => _errorMessage;
   String? get gameWinner => _gameWinner;
@@ -76,13 +78,6 @@ class GameState extends ChangeNotifier {
     return _connectedDeviceName;
   }
 
-  // Format time for display (mm:ss)
-  String get formattedTime {
-    int minutes = _timeRemaining ~/ 60;
-    int seconds = _timeRemaining % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
-
   // ========== Setters / Update Methods ==========
 
   void setGamePhase(GamePhase phase) {
@@ -92,6 +87,20 @@ class GameState extends ChangeNotifier {
 
   void setCurrentTurn(CurrentTurn turn) {
     _currentTurn = turn;
+
+    // ========== SPOOF MANAGEMENT ==========
+    // Spoof lasts for exactly 1 turn (defender's turn)
+    // When it becomes hacker's turn again, deactivate spoof
+    if (turn == CurrentTurn.hackerTurn && _spoofActive) {
+      print("[GAME] Spoof expired - it's your turn now.");
+      _spoofActive = false;
+      _spoofFakeNode = -1;
+      showTransientError(
+        'SPOOF expired - back to normal',
+        duration: const Duration(seconds: 1),
+      );
+    }
+
     notifyListeners();
   }
 
@@ -107,17 +116,39 @@ class GameState extends ChangeNotifier {
 
   /// ============ PRODUCTION: Called when M5 sends updated game state ============
   /// This is called from BLE listener when CHAR_DEFENDER_UUID receives:
-  /// {"traces": [9, 13, 15], "locked": [7], "ping": false, "timeLeft": 42}
+  /// {"traces": [9, 13, 15], "locked": [7], "defender": 15, "ping": false, "timeLeft": 42}
   ///
   /// Do NOT modify - this is production code
   void updateMapFromDefender({
     required List<int> traces,
     required List<int> locked,
-    required int timeLeft,
+    int? defenderNode,
   }) {
     _tracePositions = traces;
     _lockedNodes = locked;
-    _timeRemaining = timeLeft;
+    if (defenderNode != null) {
+      _defenderCurrentNode = defenderNode;
+    }
+
+    // ========== CHECK LOSS CONDITIONS ==========
+    // Check if any trace caught the hacker
+    if (_tracePositions.contains(_hackerCurrentNode)) {
+      print("[GAME] 🛡️ Trace caught hacker at node $_hackerCurrentNode!");
+      setGameOver("defender");
+      showPersistentError("TRACE CAUGHT YOU AT NODE $_hackerCurrentNode!");
+      notifyListeners();
+      return; // Exit early - game is over
+    }
+
+    // Check if defender is on the hacker's node
+    if (defenderNode == _hackerCurrentNode) {
+      print("[GAME] 🛡️ Defender caught hacker at node $_hackerCurrentNode!");
+      setGameOver("defender");
+      showPersistentError("DEFENDER CAUGHT YOU AT NODE $_hackerCurrentNode!");
+      notifyListeners();
+      return; // Exit early - game is over
+    }
+
     notifyListeners();
     // M5 is the authority - game over is sent via HWIN/SWIN status
   }
@@ -133,26 +164,38 @@ class GameState extends ChangeNotifier {
     }
     if (_spoofUsesRemaining > 0) {
       _spoofUsesRemaining--;
-      _spoofActive = true;
+      _toolSelectionMode = ToolSelectionMode.spoof;
+      // Spoof can target ANY node on the map for maximum mind games (sorted by node ID)
+      _validToolTargets = nodeConnections.keys.toList()..sort();
       showTransientError(
-        'SPOOF activated - next ping shows false location',
+        'SPOOF active - tap any node to send as false location',
+        duration: const Duration(seconds: 2),
+      );
+      notifyListeners();
+    }
+  }
+
+  void selectSpoofTarget(int fakeNodeId) {
+    if (_toolSelectionMode == ToolSelectionMode.spoof &&
+        _validToolTargets.contains(fakeNodeId)) {
+      _spoofFakeNode = fakeNodeId;
+      _spoofActive = true;
+      _toolSelectionMode = ToolSelectionMode.none;
+      _validToolTargets = [];
+      showTransientError(
+        'SPOOF set - defender will see you at node $fakeNodeId',
         duration: const Duration(seconds: 2),
       );
 
-      // Spoof effect lasts until next turn (1 turn cooldown)
-      Future.delayed(const Duration(seconds: 1), () {
-        _spoofActive = false;
-        notifyListeners();
-      });
+      // Send fake node position to M5
+      // Format: N{currentNode}|TOOL:spoof:{fakeNode}
+      onMoveSend?.call(
+        _hackerCurrentNode,
+        tool: "spoof",
+        targetNode: fakeNodeId,
+      );
 
-      // ============ PRODUCTION: Send tool usage to M5 ============
-      // TODO: After this line, send BLE update:
-      //   await bleWrite(CHAR_HACKER_UUID, jsonEncode({
-      //     'nodeId': _hackerCurrentNode,
-      //     'tool': 'spoof',
-      //     'toolsLeft': [_spoofUsesRemaining, _tunnelUsesRemaining, _crackUsesRemaining]
-      //   }));
-
+      // Spoof will be deactivated when it becomes hacker's turn again (in setCurrentTurn)
       notifyListeners();
     }
   }
@@ -196,13 +239,13 @@ class GameState extends ChangeNotifier {
         duration: const Duration(seconds: 2),
       );
 
-      // ============ PRODUCTION: Send tunnel move to M5 ============
-      // TODO: Send BLE update with new position:
-      //   await bleWrite(CHAR_HACKER_UUID, jsonEncode({
-      //     'nodeId': entryNodeId,
-      //     'tool': 'tunnel',
-      //     'toolsLeft': [_spoofUsesRemaining, _tunnelUsesRemaining, _crackUsesRemaining]
-      //   }));
+      // Send tunnel move to M5
+      // Format: N{currentNode}|TOOL:tunnel:{entryNode}
+      onMoveSend?.call(
+        _hackerCurrentNode,
+        tool: "tunnel",
+        targetNode: entryNodeId,
+      );
 
       notifyListeners();
     }
@@ -255,14 +298,13 @@ class GameState extends ChangeNotifier {
         duration: const Duration(seconds: 2),
       );
 
-      // ============ PRODUCTION: Send crack attempt to M5 ============
-      // TODO: Send BLE update to notify M5 of unlock attempt:
-      //   await bleWrite(CHAR_HACKER_UUID, jsonEncode({
-      //     'nodeId': _hackerCurrentNode,
-      //     'tool': 'crack',
-      //     'crackedNode': lockedNodeId,
-      //     'toolsLeft': [_spoofUsesRemaining, _tunnelUsesRemaining, _crackUsesRemaining]
-      //   }));
+      // Send crack action to M5 with the locked node being cracked
+      // Format: N{currentNode}|TOOL:crack:{targetNode}
+      onMoveSend?.call(
+        _hackerCurrentNode,
+        tool: "crack",
+        targetNode: lockedNodeId,
+      );
 
       notifyListeners();
     }
@@ -314,6 +356,7 @@ class GameState extends ChangeNotifier {
     _gamePhase = GamePhase.connecting;
     _currentTurn = CurrentTurn.defenderTurn;
     _hackerCurrentNode = -1;
+    _defenderCurrentNode = -1;
     _availableNodes = [];
     _tracePositions = [];
     _lockedNodes = [];
@@ -321,9 +364,9 @@ class GameState extends ChangeNotifier {
     _tunnelUsesRemaining = 1;
     _crackUsesRemaining = 1;
     _spoofActive = false;
+    _spoofFakeNode = -1;
     _toolSelectionMode = ToolSelectionMode.none;
     _validToolTargets = [];
-    _timeRemaining = 300;
     _gameWinner = null;
     _errorMessage = null;
     notifyListeners();
@@ -440,13 +483,30 @@ class GameState extends ChangeNotifier {
     // Send move to M5 via BLE - let M5 detect win/loss conditions
     onMoveSend?.call(targetNodeId, tool: "none");
 
+    // ========== CHECK LOCAL WIN CONDITIONS ==========
+    // Check if hacker reached CORE node (node 23)
+    if (targetNodeId == 23) {
+      showTransientError(
+        'CORE BREACHED! ACCESS GRANTED ✓',
+        duration: const Duration(seconds: 2),
+      );
+      setGameOver("hacker");
+    }
+
+    // In debug mode, check locally if hacker stepped on a trace
+    // (In production, M5 will send caught notification)
+    debugCheckIfCaught();
+
     // NOW notify listeners after move is sent and state is updated
     notifyListeners();
 
-    showTransientError(
-      'Waiting for Defender turn...',
-      duration: const Duration(seconds: 1),
-    );
+    if (targetNodeId != 23) {
+      // Only show waiting message if didn't win
+      showTransientError(
+        'Waiting for Defender turn...',
+        duration: const Duration(seconds: 1),
+      );
+    }
 
     return true;
   }
@@ -576,7 +636,6 @@ class GameState extends ChangeNotifier {
       'gamePhase': _gamePhase.toString(),
       'spoofActive': _spoofActive,
       'toolMode': _toolSelectionMode.toString(),
-      'timeRemaining': _timeRemaining,
     };
   }
 

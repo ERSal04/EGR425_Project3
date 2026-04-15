@@ -19,8 +19,8 @@ class DebugManager {
     Future.delayed(const Duration(seconds: 3), () {
       final gameState = context.read<GameState>();
 
-      // DEBUG: Deploy traces starting at nodes 4, 6, 9
-      gameState.setDebugTraces([4, 6, 9]);
+      // DEBUG: Deploy traces starting at nodes 4, 6
+      gameState.setDebugTraces([4, 6]);
 
       // DEBUG: Lock nodes 7 and 11 for testing Crack tool
       gameState.setDebugLockedNodes([7, 11]);
@@ -41,7 +41,7 @@ class DebugManager {
       if (gameState.gamePhase == GamePhase.connecting) {
         // Re-initialize debug state on game reset (but don't force entry selection)
         Future.delayed(const Duration(seconds: 3), () {
-          gameState.setDebugTraces([4, 6, 9]);
+          gameState.setDebugTraces([4, 6]);
           gameState.setDebugLockedNodes([7, 11]);
         });
       }

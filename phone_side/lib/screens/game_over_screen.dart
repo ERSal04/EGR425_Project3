@@ -64,12 +64,6 @@ class GameOverScreen extends StatelessWidget {
                       ),
                       AppSpacing.spacerLarge,
                       StatRow(
-                        label: 'Time Survived:',
-                        value: '${300 - gameState.timeRemaining}s',
-                        labelColor: AppColors.cyan,
-                        valueColor: AppColors.neonGreen,
-                      ),
-                      StatRow(
                         label: 'Tools Used:',
                         value:
                             '${(1 - gameState.spoofUsesRemaining) + (1 - gameState.tunnelUsesRemaining) + (1 - gameState.crackUsesRemaining)}',

@@ -139,14 +139,6 @@ class AppTextStyles {
     letterSpacing: 0.5,
   );
 
-  // Timer text
-  static TextStyle timerText = _baseCourierStyle(
-    AppColors.cyan,
-    fontSize: 12,
-    fontWeight: FontWeight.bold,
-    letterSpacing: 1,
-  );
-
   // Turn indicator text
   static TextStyle turnIndicator({required Color color}) => _baseCourierStyle(
     color,

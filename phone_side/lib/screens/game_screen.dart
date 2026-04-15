@@ -59,7 +59,7 @@ class _GameScreenState extends State<GameScreen> {
           children: [
             Column(
               children: [
-                // Top bar: Timer and connection
+                // Top bar: Connection indicator
                 _buildTopBar(),
                 AppSpacing.spacerSmall,
 
@@ -137,16 +137,6 @@ class _GameScreenState extends State<GameScreen> {
               ),
               AppSpacing.spacerWidthSmall,
 
-              // Timer
-              GlowButton(
-                label: gameState.formattedTime,
-                onTap: () {}, // Timer is not clickable
-                color: AppColors.cyan,
-                fontSize: 12,
-                enabled: false,
-              ),
-              AppSpacing.spacerWidthSmall,
-
               // Debug buttons
               if (DEBUG_MODE)
                 GlowButton(
@@ -192,6 +182,7 @@ class _GameScreenState extends State<GameScreen> {
             child: CustomPaint(
               painter: InteractiveGameMapPainter(
                 hackerNode: gameState.hackerCurrentNode,
+                defenderNode: gameState.defenderCurrentNode,
                 accessibleNeighbors: gameState.getAccessibleNeighbors(),
                 traceNodes: gameState.tracePositions,
                 lockedNodes: gameState.lockedNodes,
@@ -220,10 +211,13 @@ class _GameScreenState extends State<GameScreen> {
 
     final gameState = context.read<GameState>();
 
+    // Calculate the game area height (total height minus top bar, roughly)
+    final gameAreaHeight = size.height - 90;
+
     for (final node in nodes) {
+      // Use consistent normalized coordinates (0-1 scale)
       final nodeX = (node['x'] as double) * size.width;
-      final nodeY =
-          gameAreaPosition.dy + ((node['y'] as double) * (size.height - 200));
+      final nodeY = (node['y'] as double) * gameAreaHeight;
 
       const tapRadius = 30.0;
       final distance = (Offset(nodeX, nodeY) - gameAreaPosition).distance;
@@ -236,6 +230,8 @@ class _GameScreenState extends State<GameScreen> {
           gameState.selectTunnelTarget(nodeId);
         } else if (gameState.toolSelectionMode == ToolSelectionMode.crack) {
           gameState.selectCrackTarget(nodeId);
+        } else if (gameState.toolSelectionMode == ToolSelectionMode.spoof) {
+          gameState.selectSpoofTarget(nodeId);
         } else {
           // Normal movement
           gameState.moveToNode(nodeId);
@@ -306,13 +302,19 @@ class _GameScreenState extends State<GameScreen> {
                       Text(
                         gameState.toolSelectionMode == ToolSelectionMode.tunnel
                             ? 'TUNNEL TARGETS (Entry Nodes):'
-                            : 'CRACK TARGETS (Locked Nodes):',
+                            : gameState.toolSelectionMode ==
+                                  ToolSelectionMode.crack
+                            ? 'CRACK TARGETS (Locked Nodes):'
+                            : 'SPOOF TARGETS (False Location):',
                         style: TextStyle(
                           color:
                               gameState.toolSelectionMode ==
                                   ToolSelectionMode.tunnel
                               ? Color(0xFF00FFFF)
-                              : Color(0xFFFF0055),
+                              : gameState.toolSelectionMode ==
+                                    ToolSelectionMode.crack
+                              ? Color(0xFFFF0055)
+                              : Color(0xFFFFAA00),
                           fontSize: 12,
                           fontFamily: 'Courier New',
                           fontWeight: FontWeight.bold,
@@ -329,7 +331,10 @@ class _GameScreenState extends State<GameScreen> {
                               gameState.toolSelectionMode ==
                                   ToolSelectionMode.tunnel
                               ? Color(0xFF00FFFF)
-                              : Color(0xFFFF0055);
+                              : gameState.toolSelectionMode ==
+                                    ToolSelectionMode.crack
+                              ? Color(0xFFFF0055)
+                              : Color(0xFFFFAA00);
                           return GestureDetector(
                             onTap: () {
                               if (gameState.toolSelectionMode ==
@@ -338,6 +343,9 @@ class _GameScreenState extends State<GameScreen> {
                               } else if (gameState.toolSelectionMode ==
                                   ToolSelectionMode.crack) {
                                 gameState.selectCrackTarget(nodeId);
+                              } else if (gameState.toolSelectionMode ==
+                                  ToolSelectionMode.spoof) {
+                                gameState.selectSpoofTarget(nodeId);
                               }
                             },
                             child: Container(
@@ -645,6 +653,7 @@ class _GameScreenState extends State<GameScreen> {
 /// Custom painter to draw the interactive game map with node highlighting
 class InteractiveGameMapPainter extends CustomPainter {
   final int hackerNode;
+  final int defenderNode;
   final List<int> accessibleNeighbors;
   final List<int> traceNodes;
   final List<int> lockedNodes;
@@ -655,6 +664,7 @@ class InteractiveGameMapPainter extends CustomPainter {
 
   InteractiveGameMapPainter({
     required this.hackerNode,
+    required this.defenderNode,
     required this.accessibleNeighbors,
     required this.traceNodes,
     required this.lockedNodes,
@@ -682,14 +692,20 @@ class InteractiveGameMapPainter extends CustomPainter {
     _drawNodes(canvas, size);
     _drawToolEffects(canvas, size);
 
+    // Draw defender position (red highlight on current node)
+    if (defenderNode >= 0) {
+      _drawDefenderPosition(canvas, size);
+    }
+
     // Draw hacker position (cyan highlight on current node)
     if (hackerNode >= 0) {
       _drawHackerPosition(canvas, size);
     }
 
-    // TODO: Traces are hidden from the map - see STATUS panel for debug info
-    // In production, defender traces will be completely invisible to hacker
-    // _drawTraces(canvas, size);
+    // Draw trace nodes (2 dangerous nodes deployed by defender)
+    if (traceNodes.isNotEmpty) {
+      _drawTraces(canvas, size);
+    }
   }
 
   void _drawGrid(Canvas canvas, Size size) {
@@ -908,6 +924,28 @@ class InteractiveGameMapPainter extends CustomPainter {
     textPainter.paint(canvas, Offset(x - textPainter.width / 2, y + 14));
   }
 
+  void _drawDefenderPosition(Canvas canvas, Size size) {
+    final node = nodes[defenderNode];
+    final nodeX = (node['x'] as double) * size.width;
+    final nodeY = (node['y'] as double) * size.height;
+
+    // Draw red diamond indicator for defender
+    canvas.drawCircle(
+      Offset(nodeX, nodeY),
+      20.0,
+      Paint()
+        ..color = Colors.red.withOpacity(0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
+    // Inner red glow
+    canvas.drawCircle(
+      Offset(nodeX, nodeY),
+      18.0,
+      Paint()..color = Colors.red.withOpacity(0.15),
+    );
+  }
+
   void _drawHackerPosition(Canvas canvas, Size size) {
     final node = nodes[hackerNode];
     final nodeX = (node['x'] as double) * size.width;
@@ -922,6 +960,44 @@ class InteractiveGameMapPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
+  }
+
+  void _drawTraces(Canvas canvas, Size size) {
+    // Draw each trace node (deadly locations) as bright red with warning rings
+    for (final traceNodeId in traceNodes) {
+      if (traceNodeId >= 0 && traceNodeId < nodes.length) {
+        final node = nodes[traceNodeId];
+        final nodeX = (node['x'] as double) * size.width;
+        final nodeY = (node['y'] as double) * size.height;
+
+        // Outer danger ring (pulsing effect via concentric circles)
+        canvas.drawCircle(
+          Offset(nodeX, nodeY),
+          22.0,
+          Paint()
+            ..color = Colors.red.withOpacity(0.2)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+
+        // Middle ring
+        canvas.drawCircle(
+          Offset(nodeX, nodeY),
+          20.0,
+          Paint()
+            ..color = Colors.red.withOpacity(0.3)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+
+        // Inner filled circle (danger indicator)
+        canvas.drawCircle(
+          Offset(nodeX, nodeY),
+          16.0,
+          Paint()..color = Colors.red.withOpacity(0.15),
+        );
+      }
+    }
   }
 
   void _drawToolEffects(Canvas canvas, Size size) {
@@ -948,6 +1024,7 @@ class InteractiveGameMapPainter extends CustomPainter {
   @override
   bool shouldRepaint(InteractiveGameMapPainter oldDelegate) {
     return oldDelegate.hackerNode != hackerNode ||
+        oldDelegate.defenderNode != defenderNode ||
         oldDelegate.accessibleNeighbors != accessibleNeighbors ||
         oldDelegate.traceNodes != traceNodes ||
         oldDelegate.lockedNodes != lockedNodes ||
