@@ -281,22 +281,18 @@ class HackerWriteCallbacks : public BLECharacteristicCallbacks {
 };
 
 void drawScreen() {
-
   sprite.fillScreen(TFT_BLACK);
   
   if(currentStatus == WAITING_TO_CONNECT) {
-    sprite.fillScreen(TFT_BLACK);
-
     sprite.setTextSize(2);
 
     for(int i = 0; i < 10; i++) {
       int x = random(0, 320);
       int y = random(0, 240);
       sprite.setCursor(x, y);
-      sprite.print(random(0, 2)); // random 0/1
+      sprite.print(random(0, 2));
     }
 
-    // MATRIX RAIN BACKGROUND
     for(int i = 0; i < 15; i++) {
       sprite.setTextColor(TFT_DARKGREEN);
       sprite.setCursor(random(0, 320), random(0, 240));
@@ -304,222 +300,225 @@ void drawScreen() {
     }
 
     sprite.setTextColor(TFT_GREEN, TFT_BLACK);
-
     sprite.setCursor(40, 80);
     sprite.print("INITIALIZING...");
-
     sprite.setCursor(20, 110);
     sprite.print("AWAITING CONNECTION");
 
-    // Animated dots (simple loop animation)
-    int dots = (millis() / 500) % 4; // 0–3 dots
-
+    int dots = (millis() / 500) % 4;
     sprite.setCursor(260, 110);
-    for(int i = 0; i < dots; i++) {
-      sprite.print(".");
-    }
+    for(int i = 0; i < dots; i++) sprite.print(".");
 
-    // Bottom "matrix bar"
     sprite.drawRect(10, 180, 300, 20, TFT_GREEN);
     int progress = (millis() / 50) % 300;
     sprite.fillRect(10, 180, progress, 20, TFT_GREEN);
 
   } else if (currentStatus == GAME_OVER) {
-    sprite.fillScreen(TFT_BLACK);
-
     bool blink = (millis() / 400) % 2;
-
     sprite.setTextSize(2);
 
     if(result == HACKER_WIN) {
-      // HACKER WIN (RED MATRIX ALERT)
       sprite.setTextColor(blink ? TFT_RED : TFT_DARKGREY);
-
       sprite.setCursor(40, 60);
       sprite.print("CORE BREACHED");
-
       sprite.setTextColor(TFT_RED);
       sprite.setCursor(30, 100);
       sprite.print("SYSTEM FAILURE");
-
       sprite.setTextSize(1);
       sprite.setCursor(20, 140);
       sprite.print("> ROOT ACCESS GRANTED");
-
     } else if(result == DEFENDER_WIN) {
-      // DEFENDER WIN (GREEN MATRIX SUCCESS)
       sprite.setTextColor(blink ? TFT_GREEN : TFT_DARKGREEN);
-
       sprite.setCursor(40, 60);
       sprite.print("TRACE COMPLETE");
-
       sprite.setTextColor(TFT_GREEN);
       sprite.setCursor(20, 100);
       sprite.print("INTRUDER ELIMINATED");
-
       sprite.setTextSize(1);
       sprite.setCursor(20, 140);
       sprite.print("> SYSTEM SECURED");
-
     }
 
-    // Bottom prompt
     sprite.setTextSize(1);
     sprite.setTextColor(TFT_WHITE);
     sprite.setCursor(40, 200);
     sprite.print("Press A to reboot");
 
-    // Resets game after M5 BTNA was pressed
-    if (M5.BtnA.wasPressed()) {
-      resetGame();
-    }
-
-    // Optional scanlines (adds CRAZY polish)
-    // for(int y = 0; y < 240; y += 4) {
-    //   sprite.drawFastHLine(0, y, 320, TFT_DARKGREY);
-    // }
+    if (M5.BtnA.wasPressed()) resetGame();
 
   } else if(currentStatus == HACKER_SELECT) {
-    Serial.print("[SERVER] Waiting for Hacker to select an Entry node");
-
     sprite.setTextColor(TFT_GREEN, TFT_BLACK);
     sprite.setTextSize(2);
-    sprite.setCursor(20, 100);  // add this
+    sprite.setCursor(20, 100);
     sprite.print("Waiting for Hacker...");
+
   } else {
-
-    // Loop through each node
+    ////////////////////////////////////////////////////////////////
+    // PASS 1 — Draw all edges regardless of viewport
+    ////////////////////////////////////////////////////////////////
     for (int i = 0; i < 24; i++) {
-
-      // Get the current Node and its relative position to the camera
-      Node currentNode = nodes[i];
-      int screenX = (int) currentNode.worldX - cameraX;
-      int screenY = (int) currentNode.worldY - cameraY;
-
-      // Check if each node is in the camera view
-      if (screenX >= 0 && screenX <= 320 && screenY >= 0 && screenY <= 240) {
-        
-        // Loop through the Node connections and draw a line between the coords of each connected node
-        for (int j = 0; j < currentNode.connectionCount; j++) {
-          int connectingNodeId = nodes[i].connections[j];
-
+      for (int j = 0; j < nodes[i].connectionCount; j++) {
+        int connectingNodeId = nodes[i].connections[j];
+        if (connectingNodeId > i) { // draw each edge only once
           int x1 = (int)(nodes[i].worldX - cameraX);
           int y1 = (int)(nodes[i].worldY - cameraY);
           int x2 = (int)(nodes[connectingNodeId].worldX - cameraX);
           int y2 = (int)(nodes[connectingNodeId].worldY - cameraY);
           sprite.drawLine(x1, y1, x2, y2, TFT_DARKGREY);
         }
+      }
+    }
 
-        // Get the color and radius of current node
+    ////////////////////////////////////////////////////////////////
+    // PASS 2 — Draw nodes only when in viewport
+    ////////////////////////////////////////////////////////////////
+    for (int i = 0; i < 24; i++) {
+      Node currentNode = nodes[i];
+      int screenX = (int)(currentNode.worldX - cameraX);
+      int screenY = (int)(currentNode.worldY - cameraY);
+
+      if (screenX >= 0 && screenX <= 320 && screenY >= 18 && screenY <= 210) {
+
         uint32_t nodeColor = getNodeColor(currentNode.type);
         nodeRadius = getNodeRadius(currentNode.type);
 
-        // Draw the Node
         sprite.fillCircle(screenX, screenY, nodeRadius, nodeColor);
 
+        // Lock indicator
         if (currentNode.isLocked) {
-          // Draw orange lock above the node
           sprite.fillRect(screenX - 4, screenY - nodeRadius - 8, 8, 6, TFT_ORANGE);
-          sprite.drawLine(screenX - 2, screenY - nodeRadius - 8, 
+          sprite.drawLine(screenX - 2, screenY - nodeRadius - 8,
                           screenX - 2, screenY - nodeRadius - 11, TFT_ORANGE);
-          sprite.drawLine(screenX + 2, screenY - nodeRadius - 8, 
+          sprite.drawLine(screenX + 2, screenY - nodeRadius - 8,
                           screenX + 2, screenY - nodeRadius - 11, TFT_ORANGE);
-          sprite.drawLine(screenX - 2, screenY - nodeRadius - 11, 
+          sprite.drawLine(screenX - 2, screenY - nodeRadius - 11,
                           screenX + 2, screenY - nodeRadius - 11, TFT_ORANGE);
-          // Orange outline on the node itself
           sprite.drawCircle(screenX, screenY, nodeRadius + 2, TFT_ORANGE);
         }
 
-        // Indicate the hacker's location in testMode
+        // Hacker location in testMode
         if (i == hackerPosition && testMode) {
           sprite.fillCircle(screenX, screenY, nodeRadius - 2, TFT_PINK);
         }
 
-        // Indicate if the node contains a trace
+        // Trace indicator
         if(currentNode.traceCount > 0) {
           sprite.fillCircle(screenX, screenY, nodeRadius - 2, TFT_PURPLE);
         }
 
-        // If selected Node contains a trace, expand the Purple
+        // Selection highlight
         if (i == selectedNode && currentNode.traceCount > 0) {
           sprite.fillCircle(screenX, screenY, nodeRadius, TFT_PURPLE);
         } else if (i == selectedNode) {
-          // If node is selected, highlight it
           sprite.drawCircle(screenX, screenY, nodeRadius + 4, TFT_WHITE);
-        }
-
-        if(defenderState == NODE_SELECT) {
-          sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
-          sprite.setTextColor(nodes[selectedNode].isLocked ? TFT_ORANGE : TFT_WHITE);
-          sprite.setCursor(5, 218);
-          if (speedBoostActive && speedBoostMoveOne) {
-              sprite.setTextColor(TFT_YELLOW);
-              sprite.printf("BOOST! T%d < Node %d > B:2nd Move", selectedTrace, selectedNode);
-          } else if (speedBoostActive) {
-              sprite.setTextColor(TFT_YELLOW);
-              sprite.printf("BOOST! T%d < Node %d > B:1st Move", selectedTrace, selectedNode);
-          } else if (nodes[selectedNode].isLocked) {
-              sprite.printf("T%d < Node %d > LOCKED!", selectedTrace, selectedNode);
-          } else {
-              sprite.printf("T%d < Node %d > B:Move | Y:Switch", selectedTrace, selectedNode);
-          }
-        }
-
-        if (defenderState == TOOL_SELECT && currentStatus == GAME_IN_PROGRESS) {
-          sprite.fillRect(0, 195, 320, 45, TFT_BLACK);
-          sprite.drawRect(0, 195, 320, 45, TFT_CYAN);
-
-          const char* toolNames[] = {"NODE LOCK", "SPEED BOOST", "PING SCAN"};
-          int toolUsages[] = {nodeLockUsage, speedBoostUsage, pingScanUsage};
-
-          sprite.setTextSize(1);
-
-          if (toolConfirmed) {
-            // Node lock target selection mode
-            sprite.setTextColor(TFT_RED);
-            sprite.setCursor(40, 200);
-            sprite.printf("LOCKING NODE %d", selectedNode);
-            sprite.setTextColor(TFT_WHITE);
-            sprite.setCursor(40, 212);
-            sprite.print("< > cycle  B: Lock  SELECT: Cancel");
-          } else {
-            // Normal tool cycling
-            sprite.setTextColor(TFT_CYAN);
-            sprite.setCursor(4, 205);
-            sprite.print("<");
-            sprite.setCursor(312, 205);
-            sprite.print(">");
-            sprite.setTextColor(TFT_YELLOW);
-            sprite.setCursor(60, 200);
-            sprite.printf("[ %s ]", toolNames[toolIndex]);
-            sprite.setTextColor(TFT_WHITE);
-            sprite.setCursor(60, 212);
-            sprite.printf("Uses left: %d", toolUsages[toolIndex]);
-            sprite.setTextColor(TFT_GREEN);
-            sprite.setCursor(60, 224);
-            sprite.print("START: Use  SELECT: Back");
-          }
         }
       }
     }
 
+    ////////////////////////////////////////////////////////////////
+    // TOP STATUS BAR
+    ////////////////////////////////////////////////////////////////
+    sprite.fillRect(0, 0, 320, 18, 0x1082);
+    sprite.drawFastHLine(0, 18, 320, TFT_CYAN);
+    sprite.setTextSize(1);
+
+    if (currentTurn == DEFENDER_TURN) {
+      sprite.setTextColor(TFT_GREEN);
+      sprite.setCursor(4, 5);
+      sprite.print("DEFENDER TURN");
+    } else {
+      sprite.setTextColor(TFT_RED);
+      sprite.setCursor(4, 5);
+      sprite.print("HACKER TURN");
+    }
+
+    sprite.setTextColor(TFT_CYAN);
+    sprite.setCursor(110, 5);
+    if (defenderState == MAP_VIEW)        sprite.print("[ MAP VIEW ]");
+    else if (defenderState == NODE_SELECT) sprite.print("[ NODE SEL ]");
+    else if (defenderState == TOOL_SELECT) sprite.print("[ TOOLS ]");
+
+    sprite.setTextColor(TFT_WHITE);
+    sprite.setCursor(240, 5);
+    sprite.printf("L:%d S:%d P:%d", nodeLockUsage, speedBoostUsage, pingScanUsage);
+
+    ////////////////////////////////////////////////////////////////
+    // BOTTOM HUD — NODE SELECT
+    ////////////////////////////////////////////////////////////////
+    if(defenderState == NODE_SELECT) {
+      sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
+      sprite.setCursor(5, 218);
+      if (speedBoostActive && speedBoostMoveOne) {
+        sprite.setTextColor(TFT_YELLOW);
+        sprite.printf("BOOST! T%d < Node %d > B:2nd Move", selectedTrace, selectedNode);
+      } else if (speedBoostActive) {
+        sprite.setTextColor(TFT_YELLOW);
+        sprite.printf("BOOST! T%d < Node %d > B:1st Move", selectedTrace, selectedNode);
+      } else if (nodes[selectedNode].isLocked) {
+        sprite.setTextColor(TFT_ORANGE);
+        sprite.printf("T%d < Node %d > LOCKED!", selectedTrace, selectedNode);
+      } else {
+        sprite.setTextColor(TFT_WHITE);
+        sprite.printf("T%d < Node %d > B:Move | Y:Switch", selectedTrace, selectedNode);
+      }
+    }
+
+    ////////////////////////////////////////////////////////////////
+    // BOTTOM HUD — TOOL SELECT
+    ////////////////////////////////////////////////////////////////
+    if (defenderState == TOOL_SELECT) {
+      sprite.fillRect(0, 195, 320, 45, TFT_BLACK);
+      sprite.drawRect(0, 195, 320, 45, TFT_CYAN);
+
+      const char* toolNames[] = {"NODE LOCK", "SPEED BOOST", "PING SCAN"};
+      int toolUsages[] = {nodeLockUsage, speedBoostUsage, pingScanUsage};
+
+      sprite.setTextSize(1);
+
+      if (toolConfirmed) {
+        sprite.setTextColor(TFT_RED);
+        sprite.setCursor(40, 200);
+        sprite.printf("LOCKING NODE %d", selectedNode);
+        sprite.setTextColor(TFT_WHITE);
+        sprite.setCursor(40, 212);
+        sprite.print("< > cycle  B: Lock  SELECT: Cancel");
+      } else {
+        sprite.setTextColor(TFT_CYAN);
+        sprite.setCursor(4, 205);
+        sprite.print("<");
+        sprite.setCursor(312, 205);
+        sprite.print(">");
+        sprite.setTextColor(TFT_YELLOW);
+        sprite.setCursor(60, 200);
+        sprite.printf("[ %s ]", toolNames[toolIndex]);
+        sprite.setTextColor(TFT_WHITE);
+        sprite.setCursor(60, 212);
+        sprite.printf("Uses left: %d", toolUsages[toolIndex]);
+        sprite.setTextColor(TFT_GREEN);
+        sprite.setCursor(60, 224);
+        sprite.print("START: Use  SELECT: Back");
+      }
+    }
+
+    ////////////////////////////////////////////////////////////////
+    // PING SCAN PULSE — drawn last so it's on top
+    ////////////////////////////////////////////////////////////////
     if (pingScanActive && hackerPosition >= 0) {
       int pingTarget = (spoofedHackerPosition >= 0) ? spoofedHackerPosition : hackerPosition;
-      Node hackerNode = nodes[pingTarget];
-      int hScreenX = (int)(hackerNode.worldX - cameraX);
-      int hScreenY = (int)(hackerNode.worldY - cameraY);
-      
+      Node pingNode = nodes[pingTarget];
+      int hScreenX = (int)(pingNode.worldX - cameraX);
+      int hScreenY = (int)(pingNode.worldY - cameraY);
+
       if (hScreenX >= -20 && hScreenX <= 340 && hScreenY >= -20 && hScreenY <= 260) {
-          float pulse = sin(millis() / 150.0f);
-          int pulseRadius = 16 + (int)(pulse * 6); // much larger: 10 to 22
-          
-          sprite.drawCircle(hScreenX, hScreenY, pulseRadius, TFT_RED);
-          sprite.drawCircle(hScreenX, hScreenY, pulseRadius + 3, TFT_RED);
-          sprite.drawCircle(hScreenX, hScreenY, pulseRadius + 6, 0x7800);
+        float pulse = sin(millis() / 150.0f);
+        int pulseRadius = 16 + (int)(pulse * 6);
+        sprite.drawCircle(hScreenX, hScreenY, pulseRadius, TFT_RED);
+        sprite.drawCircle(hScreenX, hScreenY, pulseRadius + 3, TFT_RED);
+        sprite.drawCircle(hScreenX, hScreenY, pulseRadius + 6, 0x7800);
       }
     }
   }
-  // Push constructed frame
+
   sprite.pushSprite(0, 0);
 }
 
