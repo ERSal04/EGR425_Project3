@@ -113,7 +113,12 @@ int pingScanUsage = 3; // Number of ping scans left
 bool speedBoostActive = false;
 int speedBoostUsage = 2; // Count of how many speed boosts left
 int speedBoostDuration = 0; // Count of how long the speed boost is active for
+// Speed boost move tracking
+bool speedBoostMoveOne = false; // true after first move, waiting for second
 
+// Hacker tools
+bool hackerSpoofActive = false;
+int spoofedHackerPosition = -1; // used when spoof is active
 
 //////////////////////////////////////////////////////
 // Test Variable Declarations
@@ -247,9 +252,30 @@ class HackerWriteCallbacks : public BLECharacteristicCallbacks {
     // Chnage to Defender's turn
     currentTurn = DEFENDER_TURN;
 
-    // Apply tool if used
+    // Parse tool — format is "toolname" or "toolname:targetNode"
     if (tool != "none") {
-      // Handle tool
+        int colonIdx = tool.indexOf(':');
+        String toolName = (colonIdx >= 0) ? tool.substring(0, colonIdx) : tool;
+        int toolTarget = (colonIdx >= 0) ? tool.substring(colonIdx + 1).toInt() : -1;
+
+        Serial.printf("[SERVER] Tool used: %s target: %d\n", toolName.c_str(), toolTarget);
+
+        if (toolName == "crack" && toolTarget >= 0) {
+            // Unlock the target node
+            nodes[toolTarget].isLocked = false;
+            Serial.printf("[SERVER] Node %d unlocked by Crack\n", toolTarget);
+
+        } else if (toolName == "tunnel" && toolTarget >= 0 && toolTarget <= 3) {
+            // Move hacker to entry node
+            if (hackerPosition >= 0) nodes[hackerPosition].occupant = NONE;
+            hackerPosition = toolTarget;
+            nodes[hackerPosition].occupant = HACKER;
+            Serial.printf("[SERVER] Hacker tunneled to entry node %d\n", hackerPosition);
+
+        } else if (toolName == "spoof") {
+            hackerSpoofActive = true;
+            Serial.println("[SERVER] Spoof activated");
+        }
     }
   }
 };
@@ -426,7 +452,13 @@ void drawScreen() {
           sprite.fillRect(0, 210, 320, 30, TFT_DARKGREY);
           sprite.setTextColor(nodes[selectedNode].isLocked ? TFT_ORANGE : TFT_WHITE);
           sprite.setCursor(5, 218);
-          if (nodes[selectedNode].isLocked) {
+          if (speedBoostActive && speedBoostMoveOne) {
+              sprite.setTextColor(TFT_YELLOW);
+              sprite.printf("BOOST! T%d < Node %d > B:2nd Move", selectedTrace, selectedNode);
+          } else if (speedBoostActive) {
+              sprite.setTextColor(TFT_YELLOW);
+              sprite.printf("BOOST! T%d < Node %d > B:1st Move", selectedTrace, selectedNode);
+          } else if (nodes[selectedNode].isLocked) {
               sprite.printf("T%d < Node %d > LOCKED!", selectedTrace, selectedNode);
           } else {
               sprite.printf("T%d < Node %d > B:Move | Y:Switch", selectedTrace, selectedNode);
@@ -472,7 +504,8 @@ void drawScreen() {
     }
 
     if (pingScanActive && hackerPosition >= 0) {
-      Node hackerNode = nodes[hackerPosition];
+      int pingTarget = (spoofedHackerPosition >= 0) ? spoofedHackerPosition : hackerPosition;
+      Node hackerNode = nodes[pingTarget];
       int hScreenX = (int)(hackerNode.worldX - cameraX);
       int hScreenY = (int)(hackerNode.worldY - cameraY);
       
@@ -916,12 +949,24 @@ void handleDefenderTurn() {
                 defenderState = MAP_VIEW;
             } else if (activeTool == TOOL_PINGSCAN && pingScanUsage > 0 && !pingScanCooldown) {
                 pingScanActive = true;
-                // Pan camera to hacker location
-                cameraX = nodes[hackerPosition].worldX - 160;
-                cameraY = nodes[hackerPosition].worldY - 120;
                 pingScanUsage--;
                 pingScanCooldown = true;
                 pingScanRevealTurns = 1;
+
+                // If hacker has spoof active, pan to wrong node
+                if (hackerSpoofActive) {
+                    int fakeNode = random(0, 23);
+                    while (fakeNode == hackerPosition) fakeNode = random(0, 23);
+                    spoofedHackerPosition = fakeNode;
+                    cameraX = nodes[fakeNode].worldX - 160;
+                    cameraY = nodes[fakeNode].worldY - 120;
+                    hackerSpoofActive = false;
+                } else {
+                    spoofedHackerPosition = -1; // no spoof, use real position
+                    cameraX = nodes[hackerPosition].worldX - 160;
+                    cameraY = nodes[hackerPosition].worldY - 120;
+                }
+
                 sendDefenderState();
                 currentTurn = HACKER_TURN;
                 defenderState = MAP_VIEW;
@@ -1032,47 +1077,43 @@ void handleDefenderTurn() {
       if (connectionIndex == -1) {
         // Can not confirm no neighbor selected yet
 
-      } else if (toolConfirmed && activeTool == TOOL_NODELOCK) {
-          // Lock the selected node
-          if (!nodes[selectedNode].isLocked && nodeLockUsage > 0) {
-              nodes[selectedNode].isLocked = true;
-              nodeLockUsage--;
-              toolConfirmed = false;
-              sendDefenderState();
-              currentTurn = HACKER_TURN;
-              defenderState = MAP_VIEW;
-          }
       } else if (nodes[selectedNode].isLocked) {
         // Check to see if desired destination node is locked before allowing move
         // Display warning text that says "Cannot move. Node is locked"
 
       } else {
-
-        // Decrease the count of traces on selectedTrace's node before updating the selectedTrace's position 
+        // Move the trace
         nodes[tracePositions[selectedTrace]].traceCount--;
         nodes[tracePositions[selectedTrace]].occupant = NONE;
-
-        // Update selectedTrace's position to new node
         tracePositions[selectedTrace] = selectedNode;
 
-        // Check if the trace landed on hacker position
+        // Check win condition after first move
         if (tracePositions[selectedTrace] == hackerPosition) {
           result = DEFENDER_WIN;
           currentStatus = GAME_OVER;
+          sendDefenderState();
+          currentTurn = HACKER_TURN;
+          defenderState = MAP_VIEW;
+          speedBoostMoveOne = false;
+          speedBoostActive = false;
         } else {
-          // Increment new selectedTrace's current node's trace count
           nodes[tracePositions[selectedTrace]].traceCount++;
           nodes[tracePositions[selectedTrace]].occupant = TRACE;
+
+          if (speedBoostActive && !speedBoostMoveOne) {
+            // First move done — reset for second move
+            speedBoostMoveOne = true;
+            connectionIndex = -1;
+            // Stay in NODE_SELECT, same trace
+          } else {
+            // Normal end of turn (or second speed boost move)
+            sendDefenderState();
+            currentTurn = HACKER_TURN;
+            defenderState = MAP_VIEW;
+            speedBoostMoveOne = false;
+            speedBoostActive = false;
+          }
         }
-
-        // Send the new Defender state to the hacker
-        sendDefenderState();
-
-        // End turn for defender
-        currentTurn = HACKER_TURN;
-
-        // Return to MAP_VIEW for defender
-        defenderState = MAP_VIEW;
       }
     }
 
@@ -1119,6 +1160,10 @@ void resetGame() {
     pingScanCooldown = false;
     pingScanRevealTurns = 0;
     speedBoostActive = false;
+    speedBoostMoveOne = false;
+
+    hackerSpoofActive = false;
+    spoofedHackerPosition = -1;
 
     // Reset all node occupants and locks
     for (int i = 0; i < 24; i++) {
