@@ -458,33 +458,40 @@ class GameState extends ChangeNotifier {
     1: [8, 19], // ENTRY_B
     2: [10, 4], // ENTRY_C
     3: [15, 7], // ENTRY_D
+
     // TOP-LEFT QUADRANT C
     4: [22, 11, 17, 2], // MID_TL
-    10: [12, 11], // TOP_L
-    11: [12, 17, 4, 6], // INN_TL → cross to 6
+    10: [2, 12, 11], // TOP_L
+    11: [10, 12, 17, 4, 6], // INN_TL → cross to 6
     17: [22, 4, 11], // INN_ML
+
     // TOP-RIGHT QUADRANT D
     7: [23, 14, 20, 3], // MID_TR
-    15: [12, 14], // TOP_R
+    15: [3, 12, 14], // TOP_R
     14: [12, 20, 7, 13, 15], // INN_TR
     20: [23, 7, 14], // INN_MR
+
     // TOP CENTER
     12: [10, 15, 11, 14], // TOP_C
+
     // BOTTOM-LEFT QUADRANT A
     5: [9, 6, 0], // BOT_L
     6: [9, 5, 16, 18, 11], // INN_BL2
     16: [22, 6, 18, 0], // MID_BL
     18: [22, 16, 6], // INN_BL
+
     // BOTTOM-RIGHT QUADRANT B (reflected A)
     8: [9, 13, 1], // BOT_R
     13: [9, 8, 19, 21, 14], // INN_BR2
     19: [23, 13, 21, 1], // MID_BR
     21: [23, 19, 13], // INN_BR
+
     // BOTTOM CENTER
-    9: [0, 1, 5, 8, 13], // BOT_C
+    9: [5, 8, 13, 6], // BOT_C
+
     // JUNCTIONS & CORE
-    22: [4, 17, 18, 6, 24], // JCT_L
-    23: [7, 20, 21, 13, 24], // JCT_R
+    22: [4, 17, 18, 16, 24], // JCT_L
+    23: [7, 20, 21, 19, 24], // JCT_R
     24: [22, 23], // CORE
   };
 
