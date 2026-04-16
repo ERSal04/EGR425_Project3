@@ -27,6 +27,8 @@ class GameState extends ChangeNotifier {
   List<int> _availableNodes = []; // Nodes hacker can move to
   List<int> _tracePositions = []; // Where defender's traces are
   List<int> _lockedNodes = []; // Locked nodes (grey out)
+  int _currentMap = 1; // MAP 1 or MAP 2 (1 or 2)
+  bool _mapReceivedFromDefender = false; // Has defender selected a map?
 
   // ========== Hacker Tools ==========
   int _spoofUsesRemaining = 3; // Spoof has 3 uses
@@ -44,6 +46,9 @@ class GameState extends ChangeNotifier {
   String? _errorMessage;
   String? _gameWinner; // "hacker", "defender", or null
   String _connectedDeviceName = "M5Core2";
+
+  // ========== Debug Info ==========
+  String _lastSentData = ""; // Track last data sent to M5
 
   // ========== BLE Callbacks ==========
   Function(int nodeId, {String tool, int? targetNode})?
@@ -68,6 +73,8 @@ class GameState extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String? get gameWinner => _gameWinner;
   String get connectedDeviceName => _connectedDeviceName;
+  String get lastSentData => _lastSentData;
+  bool get mapReceivedFromDefender => _mapReceivedFromDefender;
 
   // Helper to truncate device name
   String get displayDeviceName {
@@ -114,6 +121,11 @@ class GameState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void recordSentData(String data) {
+    _lastSentData = data;
+    notifyListeners();
+  }
+
   /// ============ PRODUCTION: Called when M5 sends updated game state ============
   /// This is called from BLE listener when CHAR_DEFENDER_UUID receives:
   /// {"traces": [9, 13, 15], "locked": [7], "defender": 15, "ping": false, "timeLeft": 42}
@@ -129,6 +141,9 @@ class GameState extends ChangeNotifier {
     if (defenderNode != null) {
       _defenderCurrentNode = defenderNode;
     }
+
+    // Update available nodes since locked nodes changed
+    _availableNodes = getAccessibleNeighbors();
 
     // ========== CHECK LOSS CONDITIONS ==========
     // Check if any trace caught the hacker
@@ -166,7 +181,7 @@ class GameState extends ChangeNotifier {
       _spoofUsesRemaining--;
       _toolSelectionMode = ToolSelectionMode.spoof;
       // Spoof can target ANY node on the map for maximum mind games (sorted by node ID)
-      _validToolTargets = nodeConnections.keys.toList()..sort();
+      _validToolTargets = getNodeConnections().keys.toList()..sort();
       showTransientError(
         'SPOOF active - tap any node to send as false location',
         duration: const Duration(seconds: 2),
@@ -265,7 +280,7 @@ class GameState extends ChangeNotifier {
       _toolSelectionMode = ToolSelectionMode.crack;
       // Get locked neighbors
       final lockedNeighbors =
-          GameState.nodeConnections[_hackerCurrentNode]
+          getNodeConnections()[_hackerCurrentNode]
               ?.where((n) => _lockedNodes.contains(n))
               .toList() ??
           [];
@@ -360,6 +375,7 @@ class GameState extends ChangeNotifier {
     _availableNodes = [];
     _tracePositions = [];
     _lockedNodes = [];
+    _mapReceivedFromDefender = false; // Reset map selection
     _spoofUsesRemaining = 3;
     _tunnelUsesRemaining = 1;
     _crackUsesRemaining = 1;
@@ -373,10 +389,23 @@ class GameState extends ChangeNotifier {
   }
 
   /// Called when hacker selects an entry node
+  /// ============ REQUIRES: Defender must have selected map first ============
   void hackerSelectEntry(int entryNodeId) {
+    // WAIT for map selection before proceeding
+    if (!_mapReceivedFromDefender) {
+      showTransientError(
+        'Waiting for Defender to select a map...',
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
     _hackerCurrentNode = entryNodeId;
     _gamePhase = GamePhase.playing;
     _currentTurn = CurrentTurn.hackerTurn; // Always start on hacker's turn
+
+    // Update available nodes based on current position
+    _availableNodes = getAccessibleNeighbors();
 
     // Send entry selection to M5 via BLE
     onMoveSend?.call(entryNodeId, tool: "none");
@@ -385,7 +414,7 @@ class GameState extends ChangeNotifier {
   }
 
   /// Define node adjacency map (which nodes connect to which)
-  /// This is the network topology - matches M5Core2 exactly
+  /// This is the network topology for MAP 1 - matches M5Core2 exactly
   static const Map<int, List<int>> nodeConnections = {
     // Entry nodes (4 starting points)
     0: [4, 6],
@@ -419,10 +448,118 @@ class GameState extends ChangeNotifier {
     23: [15, 20, 21, 22],
   };
 
-  /// Get neighbor nodes (accessible from hackerCurrentNode)
+  /// Define node adjacency map for MAP 2 - Symmetric 4-quadrant maze
+  /// 25 nodes: 4 entries, 18 normal, 2 junctions, 1 core
+  /// Quadrants C & D (top) mirror of Quadrants A & B (bottom)
+  /// Cross-connections: 11↔6 and 20↔21 allow skip-junction pathways
+  static const Map<int, List<int>> nodeConnectionsMap2 = {
+    // ENTRY NODES
+    0: [5, 16], // ENTRY_A
+    1: [8, 19], // ENTRY_B
+    2: [10, 4], // ENTRY_C
+    3: [15, 7], // ENTRY_D
+    // TOP-LEFT QUADRANT C
+    4: [22, 11, 17, 2], // MID_TL
+    10: [12, 11], // TOP_L
+    11: [12, 17, 4, 6], // INN_TL → cross to 6
+    17: [22, 4, 11], // INN_ML
+    // TOP-RIGHT QUADRANT D
+    7: [23, 14, 20, 3], // MID_TR
+    15: [12, 14], // TOP_R
+    14: [12, 20, 7, 13, 15], // INN_TR
+    20: [23, 7, 14], // INN_MR
+    // TOP CENTER
+    12: [10, 15, 11, 14], // TOP_C
+    // BOTTOM-LEFT QUADRANT A
+    5: [9, 6, 0], // BOT_L
+    6: [9, 5, 16, 18, 11], // INN_BL2
+    16: [22, 6, 18, 0], // MID_BL
+    18: [22, 16, 6], // INN_BL
+    // BOTTOM-RIGHT QUADRANT B (reflected A)
+    8: [9, 13, 1], // BOT_R
+    13: [9, 8, 19, 21, 14], // INN_BR2
+    19: [23, 13, 21, 1], // MID_BR
+    21: [23, 19, 13], // INN_BR
+    // BOTTOM CENTER
+    9: [0, 1, 5, 8, 13], // BOT_C
+    // JUNCTIONS & CORE
+    22: [4, 17, 18, 6, 24], // JCT_L
+    23: [7, 20, 21, 13, 24], // JCT_R
+    24: [22, 23], // CORE
+  };
+
+  /// Get the node connections map based on current map
+  Map<int, List<int>> getNodeConnections() {
+    return _currentMap == 2 ? nodeConnectionsMap2 : nodeConnections;
+  }
+
+  /// Get the CORE node ID based on current map
+  int getCoreNode() {
+    return _currentMap == 2 ? 24 : 23;
+  }
+
+  /// Get the maximum node ID based on current map
+  int getMaxNodeId() {
+    return _currentMap == 2 ? 24 : 23;
+  }
+
+  /// Set the active map (1 or 2)
+  void setCurrentMap(int mapId) {
+    if (mapId != 1 && mapId != 2) {
+      showTransientError('Invalid map ID. Use 1 or 2.');
+      return;
+    }
+    _currentMap = mapId;
+    notifyListeners();
+  }
+
+  /// Get the current map ID
+  int getCurrentMap() {
+    return _currentMap;
+  }
+
+  /// ============ PRODUCTION: Called when M5 sends map selection via BLE ============
+  /// Format in payload: |M0 (MAP 1) or |M1 (MAP 2)
+  /// Called from _parseDefenderPayload() in ble_service.dart
+  void setActiveMapFromBLE(int mapIdFromPayload) {
+    // BLE sends: M0 = Map 1, M1 = Map 2
+    int actualMapId = mapIdFromPayload + 1; // Convert 0/1 to 1/2
+
+    if (actualMapId != 1 && actualMapId != 2) {
+      print('[GAME] ❌ Invalid map ID from BLE: $mapIdFromPayload');
+      return;
+    }
+
+    _currentMap = actualMapId;
+    _mapReceivedFromDefender = true;
+    print('[GAME] 🗺️  Map selected by Defender: MAP $actualMapId');
+
+    showTransientError(
+      'Defender selected: MAP $_currentMap',
+      duration: const Duration(seconds: 2),
+    );
+    notifyListeners();
+  }
+
+  /// DEBUG: Simulate map selection from BLE (for testing without real M5)
+  void debugSetMapFromDefender(int mapId) {
+    if (mapId != 1 && mapId != 2) {
+      showTransientError('Invalid map ID. Use 1 or 2.');
+      return;
+    }
+    _currentMap = mapId;
+    _mapReceivedFromDefender = true;
+    print('[DEBUG] Set map to MAP $mapId');
+    showTransientError(
+      'DEBUG: MAP $mapId selected',
+      duration: const Duration(seconds: 2),
+    );
+    notifyListeners();
+  }
+
   List<int> getAccessibleNeighbors() {
     if (_hackerCurrentNode < 0) return [];
-    List<int> neighbors = nodeConnections[_hackerCurrentNode] ?? [];
+    List<int> neighbors = getNodeConnections()[_hackerCurrentNode] ?? [];
     // Filter out locked nodes
     List<int> accessible = neighbors
         .where((node) => !_lockedNodes.contains(node))
@@ -477,6 +614,9 @@ class GameState extends ChangeNotifier {
       );
     }
 
+    // Update available nodes for the new position
+    _availableNodes = getAccessibleNeighbors();
+
     // Switch to defender's turn BEFORE notifying
     _currentTurn = CurrentTurn.defenderTurn;
 
@@ -484,8 +624,9 @@ class GameState extends ChangeNotifier {
     onMoveSend?.call(targetNodeId, tool: "none");
 
     // ========== CHECK LOCAL WIN CONDITIONS ==========
-    // Check if hacker reached CORE node (node 23)
-    if (targetNodeId == 23) {
+    // Check if hacker reached CORE node
+    final coreNode = getCoreNode();
+    if (targetNodeId == coreNode) {
       showTransientError(
         'CORE BREACHED! ACCESS GRANTED ✓',
         duration: const Duration(seconds: 2),
@@ -500,7 +641,7 @@ class GameState extends ChangeNotifier {
     // NOW notify listeners after move is sent and state is updated
     notifyListeners();
 
-    if (targetNodeId != 23) {
+    if (targetNodeId != coreNode) {
       // Only show waiting message if didn't win
       showTransientError(
         'Waiting for Defender turn...',
@@ -599,6 +740,7 @@ class GameState extends ChangeNotifier {
     final queue = <int>[sourceNodeId];
     final visited = {sourceNodeId};
     final parent = <int, int>{};
+    final connMap = getNodeConnections();
 
     while (queue.isNotEmpty) {
       final current = queue.removeAt(0);
@@ -611,7 +753,7 @@ class GameState extends ChangeNotifier {
         return node;
       }
 
-      final neighbors = nodeConnections[current] ?? [];
+      final neighbors = connMap[current] ?? [];
       for (final neighbor in neighbors) {
         if (!visited.contains(neighbor)) {
           visited.add(neighbor);
@@ -681,9 +823,10 @@ class GameState extends ChangeNotifier {
   /// DEBUG: Teleport hacker to a specific node (for testing specific scenarios)
   /// TODO: Remove when BLE enabled
   void debugTeleportTo(int nodeId) {
-    if (nodeId < 0 || nodeId > 23) {
+    final maxNodeId = getMaxNodeId();
+    if (nodeId < 0 || nodeId > maxNodeId) {
       showTransientError(
-        'Invalid node ID: $nodeId',
+        'Invalid node ID: $nodeId (valid range: 0-$maxNodeId)',
         duration: const Duration(seconds: 2),
       );
       return;
@@ -703,6 +846,7 @@ class GameState extends ChangeNotifier {
       [fromNode],
     ];
     final visited = {fromNode};
+    final connMap = getNodeConnections();
 
     while (queue.isNotEmpty) {
       final path = queue.removeAt(0);
@@ -712,7 +856,7 @@ class GameState extends ChangeNotifier {
         return path;
       }
 
-      final neighbors = nodeConnections[current] ?? [];
+      final neighbors = connMap[current] ?? [];
       for (final neighbor in neighbors) {
         if (!visited.contains(neighbor)) {
           visited.add(neighbor);
