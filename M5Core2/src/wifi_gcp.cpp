@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <BLEDevice.h>
 
 int  gcpHackerWins   = 0;
 int  gcpDefenderWins = 0;
@@ -27,6 +28,9 @@ void connectWiFi() {
 }
 
 void postWinToGCP(const char* winner) {
+    BLEDevice::deinit(true);
+    delay(100);
+
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[GCP] Not connected to WiFi — skipping POST");
         gcpPostDone = true;

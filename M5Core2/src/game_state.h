@@ -40,6 +40,7 @@ extern defenderUIState defenderState;
 extern float cameraX;
 extern float cameraY;
 extern int nodeRadius;
+extern unsigned long gameOverTimestamp;
 
 // ─── Defender Tools ──────────────────────────────────────
 extern int nodeLockUsage;

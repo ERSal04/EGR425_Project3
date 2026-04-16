@@ -1,4 +1,5 @@
 #include "game_state.h"
+#include "gameplay.h"
 
 // ─── Map Data ────────────────────────────────────────────
 Node nodes[24];
@@ -18,6 +19,7 @@ float cameraX = 290;
 float cameraY = 130;
 int nodeRadius = 0;
 int spoofTurnsRemaining = 0;
+unsigned long gameOverTimestamp = 0;
 
 // ─── Defender Tools ──────────────────────────────────────
 int nodeLockUsage     = 3;
@@ -112,6 +114,7 @@ void resetGame() {
     hackerSpoofActive  = false;
     spoofedHackerPosition = -1;
     spoofTurnsRemaining = 0;
+    gameOverTimestamp = 0;
 
     for (int i = 0; i < 24; i++) {
         nodes[i].occupant   = NONE;

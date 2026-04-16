@@ -1,6 +1,7 @@
 #include "gameplay.h"
 #include "ble_server.h"
 #include <Adafruit_seesaw.h>
+#include "wifi_gcp.h"
 
 extern Adafruit_seesaw gamepad;
 
@@ -42,16 +43,18 @@ void handleGameplay() {
 void handleGameOver() {
     if (!gameOverNotified) {
         sendDefenderState();
-        gameOverNotified = true;
+        gameOverNotified   = true;
+        gameOverTimestamp  = millis(); // start the timer
+    }
 
-        // POST result to GCP then fetch leaderboard
-        const char* winner = (result == HACKER_WIN) ? "hacker" : "defender";
-        postWinToGCP(winner);
-        fetchLeaderboard();
-
-        // Transition to leaderboard after short delay
-        delay(2500); // show game over screen briefly first
-        currentStatus = LEADERBOARD;
+    // Wait 3 seconds on game over screen before posting/fetching
+    if (gameOverNotified && currentStatus == GAME_OVER) {
+        if (millis() - gameOverTimestamp >= 3000) {
+            const char* winner = (result == HACKER_WIN) ? "hacker" : "defender";
+            postWinToGCP(winner);
+            fetchLeaderboard();
+            currentStatus = LEADERBOARD;
+        }
     }
 }
 
