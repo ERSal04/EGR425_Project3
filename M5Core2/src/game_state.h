@@ -4,7 +4,7 @@
 // ─── Enums ───────────────────────────────────────────────
 enum NodeType   { NORMAL, ENTRY, JUNCTION, CORE };
 enum Occupant   { NONE, HACKER, TRACE };
-enum gameStatus { WAITING_TO_CONNECT, HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER, LEADERBOARD };
+enum gameStatus { WAITING_TO_CONNECT, MAP_SELECT, HACKER_SELECT, GAME_IN_PROGRESS, GAME_OVER, LEADERBOARD };
 enum playerTurn { HACKER_TURN, DEFENDER_TURN };
 enum gameResult { NONE_RESULT, HACKER_WIN, DEFENDER_WIN };
 enum defenderUIState { MAP_VIEW, NODE_SELECT, TOOL_SELECT };
@@ -23,7 +23,7 @@ struct Node {
 };
 
 // ─── Map Data ────────────────────────────────────────────
-extern Node nodes[24];
+extern Node nodes[25];
 Node makeNode(int id, float x, float y, NodeType type, int conns[], int connCount);
 
 // ─── Game State ──────────────────────────────────────────
@@ -41,6 +41,8 @@ extern float cameraX;
 extern float cameraY;
 extern int nodeRadius;
 extern unsigned long gameOverTimestamp;
+extern int mapNodeCount;
+extern int selectedMap;
 
 // ─── Defender Tools ──────────────────────────────────────
 extern int nodeLockUsage;

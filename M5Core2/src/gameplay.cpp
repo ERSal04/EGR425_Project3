@@ -2,6 +2,8 @@
 #include "ble_server.h"
 #include <Adafruit_seesaw.h>
 #include "wifi_gcp.h"
+#include "map_data.h"
+#include <M5Core2.h>
 
 extern Adafruit_seesaw gamepad;
 
@@ -13,7 +15,48 @@ extern Adafruit_seesaw gamepad;
 #define BUTTON_SELECT 0
 
 void handleWaitingToConnect() {
-    if (testMode) currentStatus = HACKER_SELECT;
+    if (testMode) currentStatus = MAP_SELECT;
+}
+
+void handleMapSelect() {
+    // Joystick left/right cycles map, START confirms
+    // reuse existing debounced inputs from handleDefenderTurn
+    // but we need a simpler standalone read here:
+    int joyX = 1023 - gamepad.analogRead(14);
+    bool pushingLeft  = joyX < 412;
+    bool pushingRight = joyX > 612;
+
+    uint32_t buttons   = gamepad.digitalReadBulk(0xFFFFFFFF);
+    bool startPressed  = !(buttons & (1UL << BUTTON_START));
+
+    static bool lastLeft = false, lastRight = false, lastStart = false;
+    static unsigned long lastDebounce = 0;
+
+    bool leftJust  = pushingLeft  && !lastLeft;
+    bool rightJust = pushingRight && !lastRight;
+    bool startJust = startPressed && !lastStart;
+
+    if (leftJust || rightJust || startJust) {
+        unsigned long now = millis();
+        if (now - lastDebounce < 200) {
+            leftJust = rightJust = startJust = false;
+        } else {
+            lastDebounce = now;
+        }
+    }
+
+    lastLeft  = pushingLeft;
+    lastRight = pushingRight;
+    lastStart = startPressed;
+
+    if (leftJust || rightJust) selectedMap = (selectedMap == 0) ? 1 : 0;
+
+    if (startJust) {
+        initializeSelectedMap();
+        mapNodeCount  = (selectedMap == 0) ? 24 : 25;
+        currentStatus = HACKER_SELECT;
+        sendDefenderState(); 
+    }
 }
 
 void handleHackerSelect() {
@@ -56,6 +99,10 @@ void handleGameOver() {
             currentStatus = LEADERBOARD;
         }
     }
+}
+
+void handleLeaderboard() {
+    if (M5.BtnA.wasPressed()) resetGame();
 }
 
 void handleHackerTurn() {

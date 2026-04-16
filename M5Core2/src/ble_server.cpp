@@ -14,7 +14,7 @@ class ServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) override {
         (void)pServer;
         deviceConnected = true;
-        currentStatus   = HACKER_SELECT;
+        currentStatus   = MAP_SELECT;
         Serial.println("[SERVER] Client connected!");
     }
 
@@ -93,7 +93,7 @@ class HackerWriteCallbacks : public BLECharacteristicCallbacks {
                 hackerSpoofActive = true;
                 spoofTurnsRemaining   = 1;
                 Serial.println("[SERVER] Spoof activated");
-                if (toolTarget >= 0 && toolTarget < 24) {
+                if (toolTarget >= 0 && toolTarget < mapNodeCount) {
                     spoofedHackerPosition = toolTarget;
                 }
                 Serial.printf("[SERVER] Spoof activated, fake node: %d\n", spoofedHackerPosition);
@@ -142,11 +142,12 @@ void sendDefenderState() {
     String payload = "T" + String(tracePositions[0]) + "," + String(tracePositions[1]);
 
     int lockedNode = -1;
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < mapNodeCount; i++) {
         if (nodes[i].isLocked) { lockedNode = i; break; }
     }
     payload += "|L" + String(lockedNode);
     payload += pingScanActive ? "|P1" : "|P0";
+    payload += "|M" + String(selectedMap);
 
     if (currentStatus == GAME_OVER) {
         payload += (result == DEFENDER_WIN) ? "|SWIN" : "|HWIN";

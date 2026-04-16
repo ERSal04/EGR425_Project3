@@ -2,7 +2,7 @@
 #include "gameplay.h"
 
 // ─── Map Data ────────────────────────────────────────────
-Node nodes[24];
+Node nodes[25];
 
 // ─── Game State ──────────────────────────────────────────
 int hackerPosition    = -1;
@@ -20,6 +20,9 @@ float cameraY = 130;
 int nodeRadius = 0;
 int spoofTurnsRemaining = 0;
 unsigned long gameOverTimestamp = 0;
+int selectedMap = 0;
+int mapNodeCount = 24;
+
 
 // ─── Defender Tools ──────────────────────────────────────
 int nodeLockUsage     = 3;
@@ -69,18 +72,19 @@ Node makeNode(int id, float x, float y, NodeType type, int conns[], int connCoun
     return n;
 }
 
-// ─── initializeTraces ────────────────────────────────────
 void initializeTraces() {
-    int randomNode = random(9, 22);
+    // For map1: nodes 9-22, for map2: nodes 7-23 (avoid entries, junctions, core)
+    int minNode = (selectedMap == 0) ? 9  : 7;
+    int maxNode = (selectedMap == 0) ? 22 : 23;
+
+    int randomNode = random(minNode, maxNode);
     tracePositions[0] = randomNode;
     nodes[randomNode].traceCount++;
     nodes[randomNode].occupant = TRACE;
-    randomNode = random(9, 22);
 
     while (tracePositions[1] == -1) {
-        if (randomNode == tracePositions[0]) {
-            randomNode = random(9, 22);
-        } else {
+        randomNode = random(minNode, maxNode);
+        if (randomNode != tracePositions[0]) {
             tracePositions[1] = randomNode;
             nodes[randomNode].traceCount++;
             nodes[randomNode].occupant = TRACE;
@@ -100,7 +104,7 @@ void resetGame() {
     nodeLockUsage      = 3;
     pingScanUsage      = 3;
     currentTurn        = DEFENDER_TURN;
-    currentStatus      = HACKER_SELECT;
+    currentStatus      = MAP_SELECT;
     gameOverNotified   = false;
     result             = NONE_RESULT;
     activeTool         = TOOL_NODELOCK;
@@ -116,7 +120,7 @@ void resetGame() {
     spoofTurnsRemaining = 0;
     gameOverTimestamp = 0;
 
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < mapNodeCount; i++) {
         nodes[i].occupant   = NONE;
         nodes[i].traceCount = 0;
         nodes[i].isLocked   = false;

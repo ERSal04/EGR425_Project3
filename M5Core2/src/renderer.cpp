@@ -76,6 +76,53 @@ void drawScreen() {
         if (M5.BtnA.wasPressed()) resetGame();
 
     // ── HACKER SELECT ───────────────────────────────────────
+    } else if (currentStatus == MAP_SELECT) {
+        sprite.fillScreen(TFT_BLACK);
+
+        sprite.setTextColor(TFT_CYAN);
+        sprite.setTextSize(2);
+        sprite.setCursor(60, 30);
+        sprite.print("SELECT MAP");
+        sprite.drawFastHLine(0, 55, 320, TFT_CYAN);
+
+        // Map 1 box
+        uint32_t m1color = (selectedMap == 0) ? TFT_YELLOW : TFT_DARKGREY;
+        sprite.drawRect(20, 70, 130, 80, m1color);
+        sprite.setTextColor(m1color);
+        sprite.setTextSize(1);
+        sprite.setCursor(35, 90);
+        sprite.print("MAP 1");
+        sprite.setCursor(28, 105);
+        sprite.print("GRID NETWORK");
+        sprite.setCursor(28, 120);
+        sprite.print("24 nodes");
+        sprite.setCursor(28, 135);
+        sprite.print("1 Junction");
+
+        // Map 2 box
+        uint32_t m2color = (selectedMap == 1) ? TFT_YELLOW : TFT_DARKGREY;
+        sprite.drawRect(170, 70, 130, 80, m2color);
+        sprite.setTextColor(m2color);
+        sprite.setCursor(185, 90);
+        sprite.print("MAP 2");
+        sprite.setCursor(178, 105);
+        sprite.print("STAR NETWORK");
+        sprite.setCursor(178, 120);
+        sprite.print("22 nodes");
+        sprite.setCursor(178, 135);
+        sprite.print("2 Junctions");
+
+        // Arrow indicators
+        sprite.setTextColor(TFT_WHITE);
+        sprite.setTextSize(2);
+        sprite.setCursor(148, 100);
+        sprite.print((selectedMap == 0) ? ">" : "<");
+
+        // Confirm hint
+        sprite.setTextSize(1);
+        sprite.setTextColor(TFT_GREEN);
+        sprite.setCursor(60, 185);
+        sprite.print("< > to cycle   START to confirm");
     } else if (currentStatus == HACKER_SELECT) {
         sprite.setTextColor(TFT_GREEN, TFT_BLACK);
         sprite.setTextSize(2);
@@ -142,13 +189,11 @@ void drawScreen() {
             sprite.print("Press A to play again");
         }
 
-        if (M5.BtnA.wasPressed()) resetGame();
-
     // ── GAME IN PROGRESS ────────────────────────────────────
     } else {
 
         // PASS 1 — edges (no viewport check — sprite clips automatically)
-        for (int i = 0; i < 24; i++) {
+        for (int i = 0; i < mapNodeCount; i++) {
             for (int j = 0; j < nodes[i].connectionCount; j++) {
                 int nb = nodes[i].connections[j];
                 if (nb > i) {
@@ -162,7 +207,7 @@ void drawScreen() {
         }
 
         // PASS 2 — nodes (viewport check respects status bar)
-        for (int i = 0; i < 24; i++) {
+        for (int i = 0; i < mapNodeCount; i++) {
             Node& cur = nodes[i];
             int screenX = (int)(cur.worldX - cameraX);
             int screenY = (int)(cur.worldY - cameraY);
@@ -174,14 +219,17 @@ void drawScreen() {
 
             // Lock indicator
             if (cur.isLocked) {
-                sprite.fillRect(screenX - 4, screenY - nodeRadius - 8, 8, 6, TFT_ORANGE);
-                sprite.drawLine(screenX - 2, screenY - nodeRadius - 8,
-                                screenX - 2, screenY - nodeRadius - 11, TFT_ORANGE);
-                sprite.drawLine(screenX + 2, screenY - nodeRadius - 8,
-                                screenX + 2, screenY - nodeRadius - 11, TFT_ORANGE);
-                sprite.drawLine(screenX - 2, screenY - nodeRadius - 11,
-                                screenX + 2, screenY - nodeRadius - 11, TFT_ORANGE);
-                sprite.drawCircle(screenX, screenY, nodeRadius + 2, TFT_ORANGE);
+                sprite.fillRect(screenX - 7, screenY - nodeRadius - 10, 14, 10, TFT_ORANGE);
+                sprite.drawLine(screenX - 4, screenY - nodeRadius - 10,
+                                screenX - 4, screenY - nodeRadius - 16, TFT_ORANGE);
+                sprite.drawLine(screenX + 4, screenY - nodeRadius - 10,
+                                screenX + 4, screenY - nodeRadius - 16, TFT_ORANGE);
+                sprite.drawLine(screenX - 4, screenY - nodeRadius - 16,
+                                screenX + 4, screenY - nodeRadius - 16, TFT_ORANGE);
+                // Keyhole dot in center of body
+                sprite.fillCircle(screenX, screenY - nodeRadius - 7, 2, TFT_BLACK);
+                // Orange outline on node
+                sprite.drawCircle(screenX, screenY, nodeRadius + 3, TFT_ORANGE);
             }
 
             // Hacker dot (test mode)
