@@ -13,9 +13,9 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
-  /// Node definitions with positions and metadata
+  /// Node definitions with positions and metadata for MAP 1 (default)
   /// Positions in 900x900 world space (normalized to 0-1 scale)
-  static final List<Map<String, dynamic>> nodes = [
+  static final List<Map<String, dynamic>> nodesMap1 = [
     // Entry nodes (4 starting points for hacker)
     {'id': 0, 'x': 0.089, 'y': 0.889, 'type': 'entry', 'label': 'ENTRY_A'},
     {'id': 1, 'x': 0.911, 'y': 0.889, 'type': 'entry', 'label': 'ENTRY_B'},
@@ -48,6 +48,213 @@ class _GameScreenState extends State<GameScreen> {
     {'id': 23, 'x': 0.500, 'y': 0.500, 'type': 'core', 'label': 'CORE'},
   ];
 
+  /// Node definitions for MAP 2 - Symmetric Maze with Side Junctions
+  /// Strictly matches reference image layout with skewed positioning
+  /// 25 nodes: 4 entries, 18 normal, 2 junctions, 1 core
+  /// ORDERED BY ID: nodesMap2[i] has id i, for direct array lookup
+  static final List<Map<String, dynamic>> nodesMap2 = [
+    // ID 0: ENTRY_A
+    {
+      'id': 0,
+      'x': 0.089,
+      'y': 0.889,
+      'type': 'entry',
+      'label': 'ENTRY_A',
+    }, // Bottom-left
+    // ID 1: ENTRY_B
+    {
+      'id': 1,
+      'x': 0.911,
+      'y': 0.889,
+      'type': 'entry',
+      'label': 'ENTRY_B',
+    }, // Bottom-right
+    // ID 2: ENTRY_C
+    {
+      'id': 2,
+      'x': 0.089,
+      'y': 0.111,
+      'type': 'entry',
+      'label': 'ENTRY_C',
+    }, // Top-left
+    // ID 3: ENTRY_D
+    {
+      'id': 3,
+      'x': 0.911,
+      'y': 0.111,
+      'type': 'entry',
+      'label': 'ENTRY_D',
+    }, // Top-right
+    // ID 4: MID_TL (50% between ENTRY_C and TOP_L)
+    {
+      'id': 4,
+      'x': 0.192,
+      'y': 0.350,
+      'type': 'node',
+      'label': 'NODE_04',
+    }, // 50% between C and 10
+    // ID 5: BOT_L (first sweep bottom-left)
+    {
+      'id': 5,
+      'x': 0.295,
+      'y': 0.820,
+      'type': 'node',
+      'label': 'NODE_05',
+    }, // Bottom-left sweep
+    // ID 6: INN_BL2 (inner bottom-left, cross to 11)
+    {
+      'id': 6,
+      'x': 0.397,
+      'y': 0.620,
+      'type': 'node',
+      'label': 'NODE_06',
+    }, // Bottom-left inner
+    // ID 7: MID_TR (50% between TOP_R and ENTRY_D)
+    {
+      'id': 7,
+      'x': 0.808,
+      'y': 0.350,
+      'type': 'node',
+      'label': 'NODE_07',
+    }, // 50% between 15 and D
+    // ID 8: BOT_R (first sweep bottom-right)
+    {
+      'id': 8,
+      'x': 0.705,
+      'y': 0.820,
+      'type': 'node',
+      'label': 'NODE_08',
+    }, // Bottom-right sweep
+    // ID 9: BOT_C (bottom center hub)
+    {
+      'id': 9,
+      'x': 0.500,
+      'y': 0.730,
+      'type': 'node',
+      'label': 'NODE_09',
+    }, // Bottom-center hub
+    // ID 10: TOP_L (first sweep top-left)
+    {
+      'id': 10,
+      'x': 0.295,
+      'y': 0.180,
+      'type': 'node',
+      'label': 'NODE_10',
+    }, // Top-left sweep
+    // ID 11: INN_TL (inner top-left, cross to 6)
+    {
+      'id': 11,
+      'x': 0.397,
+      'y': 0.380,
+      'type': 'node',
+      'label': 'NODE_11',
+    }, // Top-left inner
+    // ID 12: TOP_C (top center hub)
+    {
+      'id': 12,
+      'x': 0.500,
+      'y': 0.270,
+      'type': 'node',
+      'label': 'NODE_12',
+    }, // Top-center hub
+    // ID 13: INN_BR2 (inner bottom-right, cross to 14)
+    {
+      'id': 13,
+      'x': 0.603,
+      'y': 0.620,
+      'type': 'node',
+      'label': 'NODE_13',
+    }, // Bottom-right inner
+    // ID 14: INN_TR (inner top-right, cross to 13)
+    {
+      'id': 14,
+      'x': 0.603,
+      'y': 0.380,
+      'type': 'node',
+      'label': 'NODE_14',
+    }, // Top-right inner
+    // ID 15: TOP_R (first sweep top-right)
+    {
+      'id': 15,
+      'x': 0.705,
+      'y': 0.180,
+      'type': 'node',
+      'label': 'NODE_15',
+    }, // Top-right sweep
+    // ID 16: MID_BL (mirror of node 4)
+    {
+      'id': 16,
+      'x': 0.192,
+      'y': 0.650,
+      'type': 'node',
+      'label': 'NODE_16',
+    }, // Mirror of node 4
+    // ID 17: INN_ML (inner left middle)
+    {
+      'id': 17,
+      'x': 0.295,
+      'y': 0.440,
+      'type': 'node',
+      'label': 'NODE_17',
+    }, // Left final
+    // ID 18: INN_BL (bottom-left at junction height)
+    {
+      'id': 18,
+      'x': 0.295,
+      'y': 0.560,
+      'type': 'node',
+      'label': 'NODE_18',
+    }, // Bottom-left junction-height
+    // ID 19: MID_BR (mirror of node 7)
+    {
+      'id': 19,
+      'x': 0.808,
+      'y': 0.650,
+      'type': 'node',
+      'label': 'NODE_19',
+    }, // Mirror of node 7
+    // ID 20: INN_MR (inner right middle)
+    {
+      'id': 20,
+      'x': 0.705,
+      'y': 0.440,
+      'type': 'node',
+      'label': 'NODE_20',
+    }, // Right final
+    // ID 21: INN_BR (bottom-right at junction height)
+    {
+      'id': 21,
+      'x': 0.705,
+      'y': 0.560,
+      'type': 'node',
+      'label': 'NODE_21',
+    }, // Bottom-right junction-height
+    // ID 22: JUNCTION_L (left junction)
+    {
+      'id': 22,
+      'x': 0.100,
+      'y': 0.500,
+      'type': 'junction',
+      'label': 'JUNCTION_L',
+    },
+    // ID 23: JUNCTION_R (right junction)
+    {
+      'id': 23,
+      'x': 0.900,
+      'y': 0.500,
+      'type': 'junction',
+      'label': 'JUNCTION_R',
+    },
+    // ID 24: CORE (center goal)
+    {'id': 24, 'x': 0.500, 'y': 0.500, 'type': 'core', 'label': 'CORE'},
+  ];
+
+  // Get nodes for current map (currently using MAP 1, can switch to MAP 2)
+  List<Map<String, dynamic>> getNodesForCurrentMap(BuildContext context) {
+    final gameState = Provider.of<GameState>(context, listen: false);
+    return gameState.getCurrentMap() == 2 ? nodesMap2 : nodesMap1;
+  }
+
   bool showGameStateOverlay = false;
 
   @override
@@ -55,40 +262,45 @@ class _GameScreenState extends State<GameScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
+        child: Consumer<GameState>(
+          builder: (context, gameState, _) {
+            final nodes = getNodesForCurrentMap(context);
+            return Stack(
               children: [
-                // Top bar: Connection indicator
-                _buildTopBar(),
-                AppSpacing.spacerSmall,
+                Column(
+                  children: [
+                    // Top bar: Connection indicator
+                    _buildTopBar(),
+                    AppSpacing.spacerSmall,
 
-                // Main game area with interactive map
-                Expanded(child: _buildGameArea()),
+                    // Main game area with interactive map
+                    Expanded(child: _buildGameArea(nodes: nodes)),
 
-                // Bottom navigation controls
-                _buildNavigationBar(),
+                    // Bottom navigation controls
+                    _buildNavigationBar(nodes: nodes),
+                  ],
+                ),
+
+                // Game state overlay (toggleable)
+                if (showGameStateOverlay) _buildGameStateOverlay(),
+
+                // Error snackbar area (bottom)
+                Positioned(
+                  bottom: 100,
+                  left: 16,
+                  right: 16,
+                  child: Consumer<GameState>(
+                    builder: (context, gameState, _) {
+                      if (gameState.errorMessage == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return _buildErrorSnackbar(gameState.errorMessage!);
+                    },
+                  ),
+                ),
               ],
-            ),
-
-            // Game state overlay (toggleable)
-            if (showGameStateOverlay) _buildGameStateOverlay(),
-
-            // Error snackbar area (bottom)
-            Positioned(
-              bottom: 100,
-              left: 16,
-              right: 16,
-              child: Consumer<GameState>(
-                builder: (context, gameState, _) {
-                  if (gameState.errorMessage == null) {
-                    return const SizedBox.shrink();
-                  }
-                  return _buildErrorSnackbar(gameState.errorMessage!);
-                },
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -155,7 +367,7 @@ class _GameScreenState extends State<GameScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'DEBUG - H:${gameState.hackerCurrentNode} T:${gameState.tracePositions.join(",")} L:${gameState.lockedNodes.join(",")}',
+                          'SENT: ${gameState.lastSentData} | H:${gameState.hackerCurrentNode} T:${gameState.tracePositions.join(",")} L:${gameState.lockedNodes.join(",")}',
                           style: const TextStyle(fontFamily: 'Courier'),
                         ),
                         duration: const Duration(seconds: 3),
@@ -170,12 +382,12 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildGameArea() {
+  Widget _buildGameArea({required List<Map<String, dynamic>> nodes}) {
     return Consumer<GameState>(
       builder: (context, gameState, _) {
         return GestureDetector(
           onTapUp: (details) {
-            _handleNodeTap(details.globalPosition, context);
+            _handleNodeTap(details.globalPosition, context, nodes);
           },
           child: Container(
             color: AppColors.background,
@@ -190,6 +402,7 @@ class _GameScreenState extends State<GameScreen> {
                 spoofActive: gameState.spoofActive,
                 toolSelectionMode: gameState.toolSelectionMode,
                 validToolTargets: gameState.validToolTargets,
+                nodeConnections: gameState.getNodeConnections(),
               ),
               size: Size.infinite,
             ),
@@ -199,7 +412,11 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _handleNodeTap(Offset globalPosition, BuildContext context) {
+  void _handleNodeTap(
+    Offset globalPosition,
+    BuildContext context,
+    List<Map<String, dynamic>> nodes,
+  ) {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final Size size = renderBox.size;
     final Offset localPosition = renderBox.globalToLocal(globalPosition);
@@ -241,7 +458,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  Widget _buildNavigationBar() {
+  Widget _buildNavigationBar({required List<Map<String, dynamic>> nodes}) {
     return Consumer<GameState>(
       builder: (context, gameState, _) {
         final neighbors = gameState.getAccessibleNeighbors();
@@ -661,6 +878,7 @@ class InteractiveGameMapPainter extends CustomPainter {
   final bool spoofActive;
   final ToolSelectionMode toolSelectionMode;
   final List<int> validToolTargets;
+  final Map<int, List<int>> nodeConnections;
 
   InteractiveGameMapPainter({
     required this.hackerNode,
@@ -672,6 +890,7 @@ class InteractiveGameMapPainter extends CustomPainter {
     required this.spoofActive,
     required this.toolSelectionMode,
     required this.validToolTargets,
+    required this.nodeConnections,
   });
 
   @override
@@ -732,8 +951,8 @@ class InteractiveGameMapPainter extends CustomPainter {
       final nodeX = (node['x'] as double) * size.width;
       final nodeY = (node['y'] as double) * size.height;
 
-      // Draw lines to connected nodes
-      final neighbors = GameState.nodeConnections[nodeId] ?? [];
+      // Draw lines to connected nodes using the current map's connections
+      final neighbors = nodeConnections[nodeId] ?? [];
       for (final neighborId in neighbors) {
         if (neighborId > nodeId) {
           // Only draw once per connection
@@ -1094,6 +1313,27 @@ class _GameStatePanel extends StatelessWidget {
                     '${gameState.crackUsesRemaining}/1 ${gameState.toolSelectionMode == ToolSelectionMode.crack ? '⚡ SELECTING' : ''}',
                 labelColor: AppColors.yellow,
                 valueColor: AppColors.neonGreen,
+              ),
+              AppSpacing.spacerXLarge,
+              LabelText('LAST SENT TO M5:', color: AppColors.cyan),
+              AppSpacing.spacerSmall,
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.cyan, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  gameState.lastSentData.isEmpty
+                      ? '(waiting...)'
+                      : gameState.lastSentData,
+                  style: TextStyle(
+                    color: AppColors.cyan,
+                    fontSize: 14,
+                    fontFamily: 'Courier New',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               AppSpacing.spacerXLarge,
               // ═══════════════════════════════════════════════════════════════════════════

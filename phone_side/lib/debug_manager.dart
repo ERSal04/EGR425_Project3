@@ -19,6 +19,9 @@ class DebugManager {
     Future.delayed(const Duration(seconds: 3), () {
       final gameState = context.read<GameState>();
 
+      // DEBUG: Set map to MAP 1 (defender's choice simulated)
+      gameState.debugSetMapFromDefender(2);
+
       // DEBUG: Deploy traces starting at nodes 4, 6
       gameState.setDebugTraces([4, 6]);
 
@@ -41,6 +44,7 @@ class DebugManager {
       if (gameState.gamePhase == GamePhase.connecting) {
         // Re-initialize debug state on game reset (but don't force entry selection)
         Future.delayed(const Duration(seconds: 3), () {
+          gameState.debugSetMapFromDefender(1);
           gameState.setDebugTraces([4, 6]);
           gameState.setDebugLockedNodes([7, 11]);
         });
@@ -54,5 +58,30 @@ class DebugManager {
       final gameState = context.read<GameState>();
       gameState.setM5Connected(true, deviceName: 'M5Core2 (SIM)');
     });
+  }
+
+  /// ========== DEBUG MAP SELECTION ==========
+  /// Simulate defender choosing a map (debug bypass for BLE)
+  static void debugChooseMap(BuildContext context, int mapId) {
+    final gameState = context.read<GameState>();
+    if (mapId != 1 && mapId != 2) {
+      gameState.showTransientError('Invalid map. Choose 1 or 2.');
+      return;
+    }
+    gameState.debugSetMapFromDefender(mapId);
+    gameState.showTransientError(
+      'DEBUG: MAP $mapId selected',
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  /// DEBUG: Check if map has been selected
+  static bool hasMapBeenSelected(GameState gameState) {
+    return gameState.mapReceivedFromDefender;
+  }
+
+  /// DEBUG: Get current map
+  static int getCurrentDebugMap(GameState gameState) {
+    return gameState.getCurrentMap();
   }
 }

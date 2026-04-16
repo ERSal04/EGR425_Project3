@@ -201,10 +201,12 @@ class BleService {
   }
 
   ///////////////////////////////////////////////////////////////
-  // Parse defender payload: "T9,13|L-1|SPLAY"
+  // Parse defender payload: "T9,13|L-1|P0|SPLAY"
   // T = trace positions
   // L = locked node (-1 if none)
+  // P = defender position (if available)
   // S = game status (SPLAY, SWIN, HWIN)
+  // M = map selection (M0=MAP1, M1=MAP2)
   ///////////////////////////////////////////////////////////////
   void _parseDefenderPayload(String payload) {
     try {
@@ -245,9 +247,24 @@ class BleService {
         }
       }
 
+      // ========== PARSE MAP SELECTION FROM M FIELD ==========
+      // Format: M0 (MAP 1) or M1 (MAP 2)
+      int mapIdToSet = 1; // Default to MAP 1
+      for (final part in parts) {
+        if (part.startsWith('M')) {
+          try {
+            int mapId = int.parse(part.substring(1)); // Extract 0 or 1
+            gameState.setActiveMapFromBLE(mapId); // Convert 0→1, 1→2
+            mapIdToSet = mapId;
+          } catch (e) {
+            print("❌ [BLE] Parse map ID error: $e");
+          }
+        }
+      }
+
       // Update game state on main thread
       print(
-        "[BLE] 📊 Parsed: Traces=$traces, Locked=$lockedNodes, Status=$statusPart, DefenderNode=$defenderNode",
+        "[BLE] 📊 Parsed: Traces=$traces, Locked=$lockedNodes, Status=$statusPart, DefenderNode=$defenderNode, Map=${mapIdToSet + 1}",
       );
 
       gameState.updateMapFromDefender(
@@ -285,8 +302,11 @@ class BleService {
     int? targetNode,
   }) async {
     // ========== VALIDATION ==========
-    if (nodeId < 0 || nodeId > 23) {
-      print("❌ [BLE] Invalid nodeId: $nodeId (must be 0-23). Not sending!");
+    final maxNodeId = gameState.getMaxNodeId();
+    if (nodeId < 0 || nodeId > maxNodeId) {
+      print(
+        "❌ [BLE] Invalid nodeId: $nodeId (must be 0-$maxNodeId). Not sending!",
+      );
       gameState.showTransientError("Error: Invalid node ID ($nodeId)");
       return;
     }
@@ -299,7 +319,7 @@ class BleService {
 
     // ========== BUILD PAYLOAD ==========
     String payload;
-    if (targetNode != null && targetNode >= 0 && targetNode <= 23) {
+    if (targetNode != null && targetNode >= 0 && targetNode <= maxNodeId) {
       // Tools with targets: crack, tunnel, spoof
       payload = "N$nodeId|TOOL:$tool:$targetNode";
     } else {
@@ -323,6 +343,12 @@ class BleService {
 
       await _hackerChar!.write(bytes, withoutResponse: false);
       print("✓ [BLE] Message sent successfully.\n");
+
+      // Record what was sent for debug display
+      String toolDetail = tool != "none"
+          ? (targetNode != null ? "$tool:$targetNode" : tool)
+          : "move";
+      gameState.recordSentData("N$nodeId | $toolDetail");
 
       // Switch to defender's turn while waiting for response
       gameState.setCurrentTurn(CurrentTurn.defenderTurn);
